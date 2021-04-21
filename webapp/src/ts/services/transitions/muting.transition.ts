@@ -26,7 +26,7 @@ export class MutingTransition implements TransitionInterface {
   private readonly CONFIG_NAME = 'muting';
   private readonly MUTE_PROPERTY = 'mute_forms';
   private readonly UNMUTE_PROPERTY = 'unmute_forms';
-  private readonly OFFLINE_LAST_UPDATE = 'offline';
+  private readonly OFFLINE = 'offline';
 
   private loadSettings(settings = {}) {
     this.transitionConfig = settings[this.CONFIG_NAME] || {};
@@ -238,7 +238,7 @@ export class MutingTransition implements TransitionInterface {
     return this.lastUpdatedOffline(contact) && contact?.muting_history?.offline?.slice(-1)[0] || {};
   }
   private lastUpdatedOffline(contact) {
-    return contact?.muting_history?.last_update === this.OFFLINE_LAST_UPDATE;
+    return contact?.muting_history?.last_update === this.OFFLINE;
   }
 
   private processContacts(context) {
@@ -262,6 +262,15 @@ export class MutingTransition implements TransitionInterface {
     });
   }
 
+  private isSameMutingEvent(eventA, eventB) {
+    if (!eventB || !eventA) {
+      return false;
+    }
+
+    const keys = ['muted', 'date', 'report_id'];
+    return keys.every(key => eventA[key] === eventB[key]);
+  }
+
   private processContact(contact, muted, reportId, context) {
     if (!contact.muting_history) {
       // store "online" state when first processing this doc offline
@@ -271,7 +280,6 @@ export class MutingTransition implements TransitionInterface {
           date: contact.muted,
         },
         offline: [],
-        last_update: this.OFFLINE_LAST_UPDATE,
       };
     }
 
@@ -280,6 +288,7 @@ export class MutingTransition implements TransitionInterface {
     } else {
       delete contact.muted;
     }
+    contact.muting_history.last_update = this.OFFLINE;
 
     const mutingEvent = {
       muted: muted,
@@ -287,10 +296,7 @@ export class MutingTransition implements TransitionInterface {
       report_id: reportId,
     };
     const lastMutingEvent = this.getLastMutingEvent(contact);
-    if (lastMutingEvent &&
-      lastMutingEvent.muted === mutingEvent.muted &&
-      lastMutingEvent.date === mutingEvent.date &&
-      lastMutingEvent.report_id === mutingEvent.report_id) {
+    if (this.isSameMutingEvent(mutingEvent, lastMutingEvent)) {
       // don't duplicate the muting events
       return;
     }

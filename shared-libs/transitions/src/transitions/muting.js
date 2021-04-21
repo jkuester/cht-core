@@ -44,11 +44,9 @@ const isNewContactWithMutedParent = (doc, infoDoc = {}) => {
     // there is no possible mute date that is "after" NaN)
     mutingUtils.isMutedInLineage(doc, new Date(infoDoc.initial_replication_date).getTime()) &&
     !infoDoc.muting_history &&
-    !isMutedOffline(doc)
+    !mutingUtils.isMutedOffline(doc)
   );
 };
-
-const isMutedOffline = (doc) => doc.muting_history && doc.muting_history.last_update === 'offline';
 
 //
 // When *new* contacts are added that have muted parents, they and their schedules should be muted.
@@ -60,7 +58,7 @@ const isMutedOffline = (doc) => doc.muting_history && doc.muting_history.last_up
 const isRelevantContact = (doc, infoDoc = {}) => {
   return Boolean(doc &&
                  isContact(doc) &&
-                 (isNewContactWithMutedParent(doc, infoDoc) || isMutedOffline(doc))
+                 (isNewContactWithMutedParent(doc, infoDoc) || mutingUtils.isMutedOffline(doc))
   );
 };
 
@@ -186,7 +184,11 @@ module.exports = {
           return;
         }
 
-        if (Boolean(contact.muted) === muteState && !isMutedOffline(contact)) {
+        // when muting offline, check if the contact was last
+        const relevantOfflineMutingEvent = mutingUtils.isMutedOffline(contact) ||
+                                           mutingUtils.isMutedOfflineByReport(contact, change.id);
+
+        if (Boolean(contact.muted) === muteState && !relevantOfflineMutingEvent) {
           // don't update registrations if contact already has desired state
           // but do process muting events that have been handled offline
           module.exports._addMsg(contact.muted ? 'already_muted' : 'already_unmuted', change.doc);

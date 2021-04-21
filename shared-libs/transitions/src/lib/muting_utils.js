@@ -8,8 +8,11 @@ const infodoc = require('@medic/infodoc');
 infodoc.initLib(db.medic, db.sentinel);
 
 const BATCH_SIZE = 50;
+const OFFLINE = 'offline';
+const ONLINE = 'online';
 
 const getContact = doc => doc.patient || doc.place;
+const isMutedOffline = (doc) => doc.muting_history && doc.muting_history.last_update === OFFLINE;
 
 const getDescendants = (contactId) => {
   return db.medic
@@ -98,6 +101,13 @@ const getLastMutingEventReportId = mutingHistory => {
   return mutingHistory &&
          mutingHistory[mutingHistory.length - 1] &&
          mutingHistory[mutingHistory.length - 1].report_id;
+};
+
+const isMutedOfflineByReport = (doc, reportId) => {
+  if (!doc.muting_history || !doc.muting_history.offline) {
+    return;
+  }
+  return doc.muting_history.offline.some(event => event.report_id === reportId);
 };
 
 const updateMutingHistory = (contact, initialReplicationDatetime, muted) => {
@@ -240,6 +250,8 @@ module.exports = {
   unmuteMessages,
   muteUnsentMessages,
   updateMutingHistory,
+  isMutedOffline,
+  isMutedOfflineByReport,
   _getContactsAndSubjectIds: getContactsAndSubjectIds,
   _updateContacts: updateContacts,
   _updateMuteHistories: updateMutingHistories,
