@@ -477,37 +477,19 @@ describe('Muting transition', () => {
         });
       });
 
-      it('should perform action if last_update was offline, even when contact is in correct state', () => {
-        const contact = { _id: 'contact', muted: 12345, muting_history: { last_update: 'offline' } };
-        const doc = { _id: 'report', type: 'data_record', form: 'mute', patient: contact };
-        mutingUtils.getContact.returns(contact);
-        config.get.returns(mutingConfig);
-        mutingUtils.updateMuteState.resolves([]);
-
-        return transition.onMatch({ id: doc._id, doc }).then(result => {
-          chai.expect(result).to.equal(true);
-          chai.expect(mutingUtils.updateMuteState.callCount).to.equal(1);
-          chai.expect(mutingUtils.updateMuteState.args[0]).to.deep.equal([ contact, true, 'report', undefined ]);
-          chai.expect(doc.tasks.length).to.equal(1);
-          chai.expect(doc.tasks[0].messages[0].message).to.equal('Muting successful');
-        });
-      });
-
       it('should perform action if contact was updated offline by this report, even when in the correct state', () => {
         const contact = {
           _id: 'contact',
           muted: 12345,
-          muting_history: {
-            online: { muted: true, date: 12345, report_id: 'online_rep' },
-            offline: [
-              { muted: false, date: 1, report_id: 'old_report' },
-              { muted: true, date: 1, report_id: 'report' },
-              { muted: false, date: 2, report_id: 'newer_report' }
-            ],
-            last_update: 'online'
-          }
         };
-        const doc = { _id: 'report', type: 'data_record', form: 'mute', patient: contact };
+        const doc = {
+          _id: 'report',
+          type: 'data_record',
+          form: 'mute',
+          patient: contact,
+          offline_transitions: { muting: true },
+        };
+
         mutingUtils.getContact.returns(contact);
         config.get.returns(mutingConfig);
         mutingUtils.updateMuteState.resolves([]);
@@ -515,7 +497,7 @@ describe('Muting transition', () => {
         return transition.onMatch({ id: doc._id, doc }).then(result => {
           chai.expect(result).to.equal(true);
           chai.expect(mutingUtils.updateMuteState.callCount).to.equal(1);
-          chai.expect(mutingUtils.updateMuteState.args[0]).to.deep.equal([ contact, true, 'report', undefined ]);
+          chai.expect(mutingUtils.updateMuteState.args[0]).to.deep.equal([ contact, true, 'report', true ]);
           chai.expect(doc.tasks.length).to.equal(1);
           chai.expect(doc.tasks[0].messages[0].message).to.equal('Muting successful');
         });

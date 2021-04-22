@@ -123,9 +123,14 @@ const runTransition = (hydratedReport, infoDocs = []) => {
     .then(() => mutingUtils.infodoc.updateTransition(change, TRANSITION_NAME, true));
 };
 
+const wasDocProcessedOffline = (change) => {
+  return change.doc &&
+         change.doc.offline_transitions &&
+         change.doc.offline_transitions[TRANSITION_NAME];
+};
+
 const processMutingEvent = (contact, change, muteState) => {
-  const processedOffline = change.doc.offline_transitions &&
-                           change.doc.offline_transitions[TRANSITION_NAME];
+  const processedOffline = wasDocProcessedOffline(change);
   return mutingUtils
     .updateMuteState(contact, muteState, change.id, processedOffline)
     .then(reportIds => {
@@ -184,11 +189,7 @@ module.exports = {
           return;
         }
 
-        // when muting offline, check if the contact was last
-        const relevantOfflineMutingEvent = mutingUtils.isMutedOffline(contact) ||
-                                           mutingUtils.isMutedOfflineByReport(contact, change.id);
-
-        if (Boolean(contact.muted) === muteState && !relevantOfflineMutingEvent) {
+        if (Boolean(contact.muted) === muteState && !wasDocProcessedOffline(change)) {
           // don't update registrations if contact already has desired state
           // but do process muting events that have been handled offline
           module.exports._addMsg(contact.muted ? 'already_muted' : 'already_unmuted', change.doc);

@@ -2320,44 +2320,4 @@ describe('mutingUtils', () => {
     });
   });
 
-  describe('isMutedOfflineByReport', () => {
-    it('should return false with undefined params', () => {
-      chai.expect(mutingUtils.isMutedOfflineByReport({})).to.equal(false);
-      chai.expect(mutingUtils.isMutedOfflineByReport({ muting_history: false })).to.equal(false);
-      chai.expect(mutingUtils.isMutedOfflineByReport({ muting_history: {} })).to.equal(false);
-      chai.expect(mutingUtils.isMutedOfflineByReport({ muting_history: { offline: [] } })).to.equal(false);
-    });
-
-    it('should return false when contact was not muted offline by report', () => {
-      const doc = {
-        muting_history: {
-          online: { muted: true, report_id: 'online_report' },
-          offline: [
-            { muted: false, report_id: 'a', date: 1 },
-            { muted: true, report_id: 'b', date: 2 },
-            { muted: false, report_id: 'c', date: 3 },
-          ]
-        }
-      };
-      chai.expect(mutingUtils.isMutedOfflineByReport(doc, 'd')).to.equal(false);
-      chai.expect(mutingUtils.isMutedOfflineByReport(doc, 'online_report')).to.equal(false);
-    });
-
-    it('should return true when contact was muted offline by report', () => {
-      const doc = {
-        muting_history: {
-          online: { muted: true, report_id: 'online_report' },
-          offline: [
-            { muted: false, report_id: 'a', date: 1 },
-            { muted: true, report_id: 'b', date: 2 },
-            { muted: false, report_id: 'c', date: 3 },
-          ]
-        }
-      };
-      chai.expect(mutingUtils.isMutedOfflineByReport(doc, 'a')).to.equal(true);
-      chai.expect(mutingUtils.isMutedOfflineByReport(doc, 'b')).to.equal(true);
-      chai.expect(mutingUtils.isMutedOfflineByReport(doc, 'c')).to.equal(true);
-    });
-  });
-
 });

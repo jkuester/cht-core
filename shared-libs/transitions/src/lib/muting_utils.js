@@ -103,13 +103,6 @@ const getLastMutingEventReportId = mutingHistory => {
          mutingHistory[mutingHistory.length - 1].report_id;
 };
 
-const isMutedOfflineByReport = (doc, reportId) => {
-  if (!doc.muting_history || !doc.muting_history.offline) {
-    return false;
-  }
-  return doc.muting_history.offline.some(event => event.report_id === reportId);
-};
-
 const updateMutingHistory = (contact, initialReplicationDatetime, muted) => {
   if (contact.muting_history && contact.muting_history.last_update === 'offline') {
     const reportId = contact.muting_history.offline && getLastMutingEventReportId(contact.muting_history.offline);
@@ -251,7 +244,6 @@ module.exports = {
   muteUnsentMessages,
   updateMutingHistory,
   isMutedOffline,
-  isMutedOfflineByReport,
   _getContactsAndSubjectIds: getContactsAndSubjectIds,
   _updateContacts: updateContacts,
   _updateMuteHistories: updateMutingHistories,
