@@ -1,7 +1,6 @@
 import { Injectable } from '@angular/core';
 import { cloneDeep } from 'lodash-es';
 
-import { DbService } from '@mm-services/db.service';
 import { SettingsService } from '@mm-services/settings.service';
 import { MutingTransition } from '@mm-services/transitions/muting.transition';
 
@@ -10,7 +9,6 @@ import { MutingTransition } from '@mm-services/transitions/muting.transition';
 })
 export class TransitionsService {
   constructor(
-    private dbService:DbService,
     private settingsService:SettingsService,
     private mutingTransition:MutingTransition,
   ) {
@@ -35,9 +33,9 @@ export class TransitionsService {
   }
 
   private async loadTransitions() {
-    await this.loadSettings();
-
     try {
+      await this.loadSettings();
+
       this.AVAILABLE_TRANSITIONS.forEach(({ name, transition }) => {
         if (!this.isEnabled(name)) {
           return;
@@ -64,13 +62,13 @@ export class TransitionsService {
 
   async applyTransitions(docs) {
     if (!this.inited) {
-      console.warn('not running transitions');
-      return docs;
+      console.warn('Attempt to run transitions without initialization');
+      return Promise.resolve(docs);
     }
 
     await this.inited;
     if (!this.loadedTransitions.length) {
-      return docs;
+      return Promise.resolve(docs);
     }
 
     // keep a copy of the docs, to return in case transitions fail and we end up with partially edited docs
@@ -85,8 +83,8 @@ export class TransitionsService {
 
         docs = await loadedTransition.transition.run(docs);
       } catch (err) {
-        //
         console.error('Error while running transitions', err);
+        // don't run partial transitions
         return originalDocs;
       }
     }

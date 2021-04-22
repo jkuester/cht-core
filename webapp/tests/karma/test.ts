@@ -7,6 +7,10 @@ import {
   platformBrowserDynamicTesting
 } from '@angular/platform-browser-dynamic/testing';
 
+import * as chai from 'chai';
+import chaiExclude from 'chai-exclude';
+chai.use(chaiExclude);
+
 declare const require: {
   context(path: string, deep?: boolean, filter?: RegExp): {
     keys(): string[];
