@@ -1,14 +1,14 @@
 import { TestBed } from '@angular/core/testing';
 import sinon from 'sinon';
-import { expect, assert } from 'chai';
+import { expect } from 'chai';
 
 import { DbService } from '@mm-services/db.service';
 import { LineageModelGeneratorService } from '@mm-services/lineage-model-generator.service';
 import { ContactMutedService } from '@mm-services/contact-muted.service';
 import { ContactTypesService } from '@mm-services/contact-types.service';
-import { MutingTransition } from '@mm-services/transitions/muting.transition'
+import { MutingTransition } from '@mm-services/transitions/muting.transition';
 import { ValidationService } from '@mm-services/validation.service';
-import { update } from 'lodash-es';
+import { clone, cloneDeep } from 'lodash-es';
 
 describe('Muting Transition', () => {
   let transition:MutingTransition;
@@ -180,7 +180,7 @@ describe('Muting Transition', () => {
           }
         }];
 
-        lineageModelGenerator.docs.resolves([{
+        const hydratedReport = {
           _id: 'new_report',
           type: 'data_record',
           form: 'mute',
@@ -197,15 +197,18 @@ describe('Muting Transition', () => {
             },
             patient_id: 'shortcode',
           },
-        }]);
-        dbService.query.withArgs('medic-client/contacts_by_place').resolves({ rows: [] });
-        dbService.get.withArgs('patient').resolves({
+        };
+        const minifiedPatient = {
           _id: 'patient',
           name: 'patient name',
           type: 'person',
           parent: { _id: 'parent' },
           patient_id: 'shortcode',
-        });
+        };
+
+        lineageModelGenerator.docs.resolves([hydratedReport]);
+        dbService.query.withArgs('medic-client/contacts_by_place').resolves({ rows: [] });
+        dbService.get.withArgs('patient').resolves(minifiedPatient);
         contactMutedService.getMuted.returns(false);
 
         const updatedDocs = await transition.run(docs);
@@ -279,7 +282,7 @@ describe('Muting Transition', () => {
           }
         }];
 
-        lineageModelGenerator.docs.resolves([{
+        const hydratedReport = {
           _id: 'a_report',
           type: 'data_record',
           form: 'unmute',
@@ -297,7 +300,8 @@ describe('Muting Transition', () => {
               name: 'parent',
             }
           },
-        }]);
+        };
+        lineageModelGenerator.docs.resolves([hydratedReport]);
         dbService.query.withArgs('medic-client/contacts_by_place').resolves({ rows: [] });
         dbService.get.withArgs('patient').resolves({
           _id: 'patient',
@@ -328,17 +332,7 @@ describe('Muting Transition', () => {
         expect(dbService.get.callCount).to.equal(1);
         expect(dbService.get.args[0]).to.deep.equal(['patient']);
         expect(contactMutedService.getMuted.callCount).to.equal(1);
-        expect(contactMutedService.getMuted.args[0]).to.deep.equal([{
-          _id: 'patient',
-          name: 'patient name',
-          type: 'person',
-          muted: 6000,
-          patient_id: 'shortcode',
-          parent: {
-            _id: 'parent',
-            name: 'parent',
-          }
-        }]);
+        expect(contactMutedService.getMuted.args[0]).to.deep.equal([hydratedReport.patient]);
 
         expect(updatedDocs).to.deep.equal([
           {
@@ -750,7 +744,7 @@ describe('Muting Transition', () => {
           },
         }];
 
-        lineageModelGenerator.docs.resolves([{
+        const hydratedReport = {
           _id: 'record',
           type: 'data_record',
           form: 'unmute',
@@ -775,7 +769,8 @@ describe('Muting Transition', () => {
               },
             },
           },
-        }]);
+        };
+        lineageModelGenerator.docs.resolves([hydratedReport]);
 
         dbService.query.withArgs('medic-client/contacts_by_place').resolves({
           rows: [
@@ -862,24 +857,7 @@ describe('Muting Transition', () => {
         expect(dbService.get.callCount).to.equal(1);
         expect(dbService.get.args[0]).to.deep.equal(['parent']);
         expect(contactMutedService.getMuted.callCount).to.equal(1);
-        expect(contactMutedService.getMuted.args[0]).to.deep.equal([{
-          _id: 'place',
-          place_id: 'place_id',
-          muted: 1234,
-          type: 'clinic',
-          contact: { _id: 'chw' },
-          parent: {
-            _id: 'parent',
-            type: 'health_center',
-            contact: { _id: 'chw' },
-            muted: 1234,
-            parent: {
-              _id: 'grandparent',
-              contact: { _id: 'chw' },
-              type: 'district_hospital'
-            },
-          },
-        }]);
+        expect(contactMutedService.getMuted.args[0]).to.deep.equal([hydratedReport.place]);
 
         const mutingDate = new Date(now).toISOString();
 
@@ -1107,12 +1085,162 @@ describe('Muting Transition', () => {
     });
 
     describe('new contacts', () => {
-      it('should mute a contact under a muted parent', () => {
+      it('should mute a person under a muted parent', async () => {
+        const now = 457385943;
+        clock.tick(now);
+        const docs = [
+          {
+            _id: 'new_contact',
+            name: 'contact',
+            type: 'person',
+            parent: { _id: 'parent', parent: { _id: 'grandparent' }}
+          }
+        ];
 
+        const hydratedContact = {
+          _id: 'new_contact',
+          name: 'contact',
+          type: 'person',
+          parent: {
+            _id: 'parent',
+            type: 'clinic',
+            muted: 1000,
+            parent: {
+              _id: 'grandparent',
+              type: 'health_center',
+            }
+          }
+        };
+        lineageModelGenerator.docs.resolves([ hydratedContact ]);
+        contactMutedService.getMutedParent.returns(hydratedContact.parent);
+
+        const updatedDocs = await transition.run(docs);
+
+        expect(lineageModelGenerator.docs.callCount).to.equal(1);
+        expect(lineageModelGenerator.docs.args[0]).to.deep.equal([docs]);
+        expect(contactMutedService.getMutedParent.callCount).to.equal(1);
+        expect(contactMutedService.getMutedParent.args[0]).to.deep.equal([hydratedContact]);
+
+        const muteTime = new Date(now).toISOString();
+        expect(updatedDocs).to.deep.equal([
+          {
+            _id: 'new_contact',
+            name: 'contact',
+            type: 'person',
+            parent: { _id: 'parent', parent: { _id: 'grandparent' }},
+            muted: muteTime,
+            muting_history: {
+              online: { muted: false, date: undefined },
+              offline: [{ muted: true, date: muteTime, report_id: undefined }],
+              last_update: 'offline',
+            }
+          },
+        ]);
       });
 
-      it('should not mute a contact under an unmuted parent', () => {
+      it('should not mute a contact under an unmuted parent', async () => {
+        const docs = [
+          {
+            _id: 'new_contact',
+            name: 'contact',
+            type: 'person',
+            parent: { _id: 'parent', parent: { _id: 'grandparent' }}
+          }
+        ];
 
+        const hydratedContact = {
+          _id: 'new_contact',
+          name: 'contact',
+          type: 'person',
+          parent: {
+            _id: 'parent',
+            type: 'clinic',
+            parent: {
+              _id: 'grandparent',
+              type: 'health_center',
+            }
+          }
+        };
+        lineageModelGenerator.docs.resolves([ hydratedContact ]);
+        contactMutedService.getMutedParent.returns(false);
+
+        const updatedDocs = await transition.run(docs);
+
+        expect(lineageModelGenerator.docs.callCount).to.equal(1);
+        expect(lineageModelGenerator.docs.args[0]).to.deep.equal([docs]);
+        expect(contactMutedService.getMutedParent.callCount).to.equal(1);
+        expect(contactMutedService.getMutedParent.args[0]).to.deep.equal([hydratedContact]);
+
+        expect(updatedDocs).to.deep.equal([
+          {
+            _id: 'new_contact',
+            name: 'contact',
+            type: 'person',
+            parent: { _id: 'parent', parent: { _id: 'grandparent' }},
+          },
+        ]);
+      });
+
+      it('should copy offline muting report in history if it exists', async () => {
+        const now = 32131;
+        clock.tick(now);
+        const docs = [
+          {
+            _id: 'new_contact',
+            name: 'contact',
+            type: 'person',
+            parent: { _id: 'parent', parent: { _id: 'grandparent' }}
+          }
+        ];
+
+        const hydratedContact = {
+          _id: 'new_contact',
+          name: 'contact',
+          type: 'person',
+          parent: {
+            _id: 'parent',
+            type: 'clinic',
+            muted: 1000,
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: false, date: 1000, report_id: 'online_report' },
+              offline: [
+                { muted: true, date: 100, report_id: 'offline1' },
+                { muted: false, date: 200, report_id: 'offline2' },
+                { muted: true, date: 300, report_id: 'offline3' },
+              ]
+            },
+            parent: {
+              _id: 'grandparent',
+              type: 'health_center',
+            }
+          }
+        };
+        lineageModelGenerator.docs.resolves([ hydratedContact ]);
+        contactMutedService.getMutedParent.returns(hydratedContact.parent);
+
+        const updatedDocs = await transition.run(docs);
+
+        expect(lineageModelGenerator.docs.callCount).to.equal(1);
+        expect(lineageModelGenerator.docs.args[0]).to.deep.equal([docs]);
+        expect(contactMutedService.getMutedParent.callCount).to.equal(1);
+        expect(contactMutedService.getMutedParent.args[0]).to.deep.equal([hydratedContact]);
+
+        const muteTime = new Date(now).toISOString();
+        expect(updatedDocs).to.deep.equal([
+          {
+            _id: 'new_contact',
+            name: 'contact',
+            type: 'person',
+            parent: { _id: 'parent', parent: { _id: 'grandparent' }},
+            muted: muteTime,
+            muting_history: {
+              online: { muted: false, date: undefined },
+              offline: [{ muted: true, date: muteTime, report_id: 'offline3' }],
+              last_update: 'offline',
+            }
+          },
+        ]);
       });
     });
 
