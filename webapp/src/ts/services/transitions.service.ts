@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { cloneDeep } from 'lodash-es';
 
 import { SettingsService } from '@mm-services/settings.service';
+import { ValidationService } from '@mm-services/validation.service';
 import { MutingTransition } from '@mm-services/transitions/muting.transition';
 
 @Injectable({
@@ -10,6 +11,7 @@ import { MutingTransition } from '@mm-services/transitions/muting.transition';
 export class TransitionsService {
   constructor(
     private settingsService:SettingsService,
+    private validationService:ValidationService,
     private mutingTransition:MutingTransition,
   ) {
   }
@@ -35,6 +37,7 @@ export class TransitionsService {
   private async loadTransitions() {
     try {
       await this.loadSettings();
+      await this.validationService.init();
 
       this.AVAILABLE_TRANSITIONS.forEach(({ name, transition }) => {
         if (!this.isEnabled(name)) {

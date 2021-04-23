@@ -6,10 +6,12 @@ import { cloneDeep } from 'lodash-es';
 import { TransitionsService } from '@mm-services/transitions.service';
 import { SettingsService } from '@mm-services/settings.service';
 import { MutingTransition } from '@mm-services/transitions/muting.transition';
+import { ValidationService } from '@mm-services/validation.service';
 
 describe('Transitions Service', () => {
   let settingsService;
   let mutingTransition;
+  let validationService;
   let service: TransitionsService;
 
   beforeEach(() => {
@@ -19,11 +21,13 @@ describe('Transitions Service', () => {
       filter: sinon.stub(),
       run: sinon.stub(),
     };
+    validationService = { init: sinon.stub() };
 
     TestBed.configureTestingModule({
       providers: [
         { provide: SettingsService, useValue: settingsService },
         { provide: MutingTransition, useValue: mutingTransition },
+        { provide: ValidationService, useValue: validationService },
       ]
     });
     service = TestBed.inject(TransitionsService);
@@ -58,6 +62,7 @@ describe('Transitions Service', () => {
     expect(mutingTransition.filter.args[0]).to.deep.equal([[{ _id: 'a' }, { _id: 'b' }]]);
     expect(mutingTransition.run.callCount).to.equal(1);
     expect(mutingTransition.run.args[0]).to.deep.equal([[{ _id: 'a' }, { _id: 'b' }]]);
+    expect(validationService.init.callCount).to.equal(1);
 
     expect(results).to.deep.equal([
       { _id: 'a', transitioned: true },
