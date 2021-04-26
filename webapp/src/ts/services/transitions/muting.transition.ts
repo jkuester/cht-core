@@ -1,7 +1,6 @@
 import { Injectable } from '@angular/core';
 import { cloneDeep } from 'lodash-es';
 
-import * as registrationUtils from '@medic/registration-utils';
 import { DbService } from '@mm-services/db.service';
 import { LineageModelGeneratorService } from '@mm-services/lineage-model-generator.service';
 import { ContactMutedService } from '@mm-services/contact-muted.service';
@@ -138,18 +137,8 @@ export class MutingTransition implements TransitionInterface {
     return !errors || !errors.length;
   }
 
-  private getSubject(report, context) {
-    let contact = report.patient || report.place;
-    if (!contact) {
-      // the report can be about a patient or place that we're just now creating
-      const subjectIds = registrationUtils.getSubjectIds(report);
-      const newContact = context.contacts.find(contact => subjectIds.includes(contact._id));
-      if (newContact) {
-        contact = context.hydratedDocs[newContact._id];
-      }
-    }
-
-    return contact;
+  private getSubject(report) {
+    return report.patient || report.place;
   }
 
   private async processReports(context) {
@@ -161,7 +150,7 @@ export class MutingTransition implements TransitionInterface {
 
   private processReport(report, hydratedReport, context) {
     const mutedState = this.isMuteForm(report.form);
-    const subject = this.getSubject(hydratedReport, context);
+    const subject = this.getSubject(hydratedReport);
     if (!subject || !!this.contactMutedService.getMuted(subject) === mutedState) {
       // no subject or already in the correct state
       return Promise.resolve();
@@ -241,10 +230,12 @@ export class MutingTransition implements TransitionInterface {
     if (!context.contacts.length) {
       return;
     }
+    const contactsToProcess = [];
 
     context.contacts.forEach(contact => {
       const hydratedContact = context.hydratedDocs[contact._id];
-      const mutedParent = this.contactMutedService.getMutedParent(hydratedContact);
+      const lineage = this.compileLineage(hydratedContact, context);
+      const mutedParent = this.contactMutedService.getMutedParent(hydratedContact, lineage);
       if (mutedParent) {
         const updatedMutedParent = context.hydratedDocs[mutedParent._id];
         // store reportId if the parent was last muted offline
@@ -253,16 +244,24 @@ export class MutingTransition implements TransitionInterface {
           this.getLastMutingEvent(updatedMutedParent).report_id :
           undefined;
 
-        this.processContact(contact, true, reportId, context);
+        contactsToProcess.push({ contact, reportId });
       }
     });
+
+    contactsToProcess.forEach(({ contact, reportId }) => this.processContact(contact, true, reportId, context));
+  }
+
+  private compileLineage(contact, context) {
+    let parent = contact.parent;
+    const lineage = [];
+    while (parent && parent._id) {
+      lineage.push(context.hydratedDocs[parent._id]);
+      parent = parent.parent;
+    }
+    return lineage;
   }
 
   private isSameMutingEvent(eventA, eventB) {
-    if (!eventB || !eventA) {
-      return false;
-    }
-
     const keys = ['muted', 'date', 'report_id'];
     return keys.every(key => eventA[key] === eventB[key]);
   }
@@ -340,7 +339,7 @@ export class MutingTransition implements TransitionInterface {
 
     if (hasMutingReport && hasUnmutingReport) {
       // we have reports that mute and unmute in the same batch, so only unmute!
-      context.reports = context.reports.filter(report => this.isUnmuteForm(report));
+      context.reports = context.reports.filter(report => this.isUnmuteForm(report.form));
     }
 
     await this.hydrateDocs(context);

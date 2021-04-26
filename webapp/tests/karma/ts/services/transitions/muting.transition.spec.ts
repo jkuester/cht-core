@@ -8,7 +8,7 @@ import { ContactMutedService } from '@mm-services/contact-muted.service';
 import { ContactTypesService } from '@mm-services/contact-types.service';
 import { MutingTransition } from '@mm-services/transitions/muting.transition';
 import { ValidationService } from '@mm-services/validation.service';
-import { clone, cloneDeep } from 'lodash-es';
+import { cloneDeep } from 'lodash-es';
 
 describe('Muting Transition', () => {
   let transition:MutingTransition;
@@ -154,8 +154,9 @@ describe('Muting Transition', () => {
   });
 
   describe('run', () => {
+    let settings;
     beforeEach(async () => {
-      const settings = {
+      settings = {
         muting: {
           mute_forms: ['mute'],
           unmute_forms: ['unmute'],
@@ -1119,7 +1120,10 @@ describe('Muting Transition', () => {
         expect(lineageModelGenerator.docs.callCount).to.equal(1);
         expect(lineageModelGenerator.docs.args[0]).to.deep.equal([docs]);
         expect(contactMutedService.getMutedParent.callCount).to.equal(1);
-        expect(contactMutedService.getMutedParent.args[0]).to.deep.equal([hydratedContact]);
+        expect(contactMutedService.getMutedParent.args[0]).to.deep.equal([
+          hydratedContact,
+          [hydratedContact.parent, hydratedContact.parent.parent],
+        ]);
 
         const muteTime = new Date(now).toISOString();
         expect(updatedDocs).to.deep.equal([
@@ -1169,7 +1173,10 @@ describe('Muting Transition', () => {
         expect(lineageModelGenerator.docs.callCount).to.equal(1);
         expect(lineageModelGenerator.docs.args[0]).to.deep.equal([docs]);
         expect(contactMutedService.getMutedParent.callCount).to.equal(1);
-        expect(contactMutedService.getMutedParent.args[0]).to.deep.equal([hydratedContact]);
+        expect(contactMutedService.getMutedParent.args[0]).to.deep.equal([
+          hydratedContact,
+          [ hydratedContact.parent, hydratedContact.parent.parent ],
+        ]);
 
         expect(updatedDocs).to.deep.equal([
           {
@@ -1224,7 +1231,10 @@ describe('Muting Transition', () => {
         expect(lineageModelGenerator.docs.callCount).to.equal(1);
         expect(lineageModelGenerator.docs.args[0]).to.deep.equal([docs]);
         expect(contactMutedService.getMutedParent.callCount).to.equal(1);
-        expect(contactMutedService.getMutedParent.args[0]).to.deep.equal([hydratedContact]);
+        expect(contactMutedService.getMutedParent.args[0]).to.deep.equal([
+          hydratedContact,
+          [hydratedContact.parent, hydratedContact.parent.parent],
+        ]);
 
         const muteTime = new Date(now).toISOString();
         expect(updatedDocs).to.deep.equal([
@@ -1242,65 +1252,1766 @@ describe('Muting Transition', () => {
           },
         ]);
       });
+
+      it('should mute multiple contacts under muted parent', async () => {
+        const now = 457385943;
+        clock.tick(now);
+        const docs = [
+          {
+            _id: 'new_clinic',
+            name: 'clinic',
+            type: 'clinic',
+            parent: { _id: 'hc', parent: { _id: 'district' } },
+          },
+          {
+            _id: 'new_person',
+            name: 'contact',
+            type: 'person',
+            parent: { _id: 'new_clinic', parent: { _id: 'hc', parent: { _id: 'district' } } },
+          }
+        ];
+
+        const hydratedContacts = [
+          {
+            _id: 'new_clinic',
+            name: 'clinic',
+            type: 'clinic',
+            parent: {
+              _id: 'hc',
+              name: 'hc',
+              type: 'hc',
+              muted: 4000,
+              parent: {
+                _id: 'district',
+                name: 'district',
+                type: 'district',
+                muted: 1230,
+              },
+            },
+          },
+          {
+            _id: 'new_person',
+            name: 'contact',
+            type: 'person',
+            parent: {
+              _id: 'new_clinic',
+              name: 'clinic',
+              type: 'clinic',
+              parent: {
+                _id: 'hc',
+                name: 'hc',
+                type: 'hc',
+                muted: 4000,
+                parent: {
+                  _id: 'district',
+                  name: 'district',
+                  type: 'district',
+                  muted: 1230,
+                },
+              },
+            },
+          },
+        ];
+
+        lineageModelGenerator.docs.resolves(hydratedContacts);
+        contactMutedService.getMutedParent.returns(hydratedContacts[0].parent);
+
+        const updatedDocs = await transition.run(docs);
+
+        expect(lineageModelGenerator.docs.callCount).to.equal(1);
+        expect(lineageModelGenerator.docs.args[0]).to.deep.equal([docs]);
+        expect(contactMutedService.getMutedParent.callCount).to.equal(2);
+        expect(contactMutedService.getMutedParent.args[0][0]).to.deep.include(hydratedContacts[0]);
+        expect(contactMutedService.getMutedParent.args[1][0]).to.deep.include(hydratedContacts[1]);
+
+        const muteTime = new Date(now).toISOString();
+        expect(updatedDocs).to.deep.equal([
+          {
+            _id: 'new_clinic',
+            name: 'clinic',
+            type: 'clinic',
+            parent: { _id: 'hc', parent: { _id: 'district' } },
+            muted: muteTime,
+            muting_history: {
+              online: { muted: false, date: undefined },
+              offline: [{ muted: true, date: muteTime, report_id: undefined }],
+              last_update: 'offline',
+            },
+          },
+          {
+            _id: 'new_person',
+            name: 'contact',
+            type: 'person',
+            parent: { _id: 'new_clinic', parent: { _id: 'hc', parent: { _id: 'district' } } },
+            muted: muteTime,
+            muting_history: {
+              online: { muted: false, date: undefined },
+              offline: [{ muted: true, date: muteTime, report_id: undefined }],
+              last_update: 'offline',
+            },
+          },
+        ]);
+      });
     });
 
     describe('filtering', () => {
-      it('should skip edited reports', () => {
+      let validMutingReport;
+      let validHydratedReport;
+      let minifiedPatient;
+      let validMutingReportWithoutContact;
+      let transitionedValidMutingReport;
+      let transitionedPatient;
 
+      beforeEach(() => {
+        validMutingReport = {
+          _id: 'new_report',
+          type: 'data_record',
+          form: 'mute',
+          contact: { _id: 'contact_id' },
+          fields: {
+            patient_id: 'patient1',
+          }
+        };
+
+        validHydratedReport = {
+          _id: 'new_report',
+          type: 'data_record',
+          form: 'mute',
+          fields: {
+            patient_id: 'patient1',
+          },
+          patient: {
+            _id: 'patient',
+            name: 'patient name',
+            type: 'person',
+            parent: {
+              _id: 'parent',
+              name: 'parent',
+            },
+            patient_id: 'patient1',
+          },
+        };
+
+        minifiedPatient = {
+          _id: 'patient',
+          name: 'patient name',
+          type: 'person',
+          parent: { _id: 'parent' },
+          patient_id: 'patient1',
+        };
+
+        validMutingReportWithoutContact = cloneDeep(validMutingReport);
+        delete validMutingReportWithoutContact.contact;
+
+        transitionedValidMutingReport = {
+          _id: 'new_report',
+          type: 'data_record',
+          form: 'mute',
+          contact: { _id: 'contact_id' },
+          fields: {
+            patient_id: 'patient1',
+          },
+          offline_transitions: { muting: true },
+        };
+
+        transitionedPatient = (now) => ({
+          _id: 'patient',
+          name: 'patient name',
+          type: 'person',
+          parent: { _id: 'parent' },
+          patient_id: 'patient1',
+          muted: new Date(now).toISOString(),
+          muting_history: {
+            last_update: 'offline',
+            online: { muted: false, date: undefined },
+            offline: [{
+              muted: true,
+              date: new Date(now).toISOString(),
+              report_id: 'new_report'
+            }]
+          },
+        });
       });
 
-      it('should skip reports that are not muting/unmuting reports', () => {
+      it('should skip edited reports', async () => {
+        const now = 12345;
+        clock.tick(now);
 
+        const oldReport = {
+          _id: 'old_report',
+          _rev: '1-32v',
+          type: 'data_record',
+          form: 'mute',
+          contact: { _id: 'contact_id' },
+          fields: {
+            patient_id: 'patient2',
+          }
+        };
+
+        const docs = [ validMutingReport, oldReport ];
+
+        lineageModelGenerator.docs.resolves([validHydratedReport]);
+        dbService.query.withArgs('medic-client/contacts_by_place').resolves({ rows: [] });
+        dbService.get.withArgs(minifiedPatient._id).resolves(minifiedPatient);
+        contactMutedService.getMuted.returns(false);
+
+        const updatedDocs = await transition.run(docs);
+
+        expect(lineageModelGenerator.docs.callCount).to.equal(1);
+        expect(lineageModelGenerator.docs.args[0]).to.deep.equal([[validMutingReportWithoutContact]]);
+        expect(dbService.query.callCount).to.equal(1);
+        expect(dbService.query.args[0]).to.deep.equal([
+          'medic-client/contacts_by_place',
+          { key: [minifiedPatient._id], include_docs: true },
+        ]);
+        expect(dbService.get.callCount).to.equal(1);
+        expect(dbService.get.args[0]).to.deep.equal([minifiedPatient._id]);
+        expect(contactMutedService.getMuted.callCount).to.equal(1);
+        expect(contactMutedService.getMuted.args[0]).to.deep.equal([validHydratedReport.patient]);
+
+        expect(updatedDocs).to.deep.equal([
+          transitionedValidMutingReport,
+          {
+            _id: 'old_report',
+            _rev: '1-32v',
+            type: 'data_record',
+            form: 'mute',
+            contact: { _id: 'contact_id' },
+            fields: {
+              patient_id: 'patient2',
+            }
+          },
+          transitionedPatient(now),
+        ]);
       });
 
-      it('should skip invalid reports', () => {
+      it('should skip reports that are not muting/unmuting reports', async () => {
+        const now = 12345;
+        clock.tick(now);
+        const nonMutingReport = {
+          _id: 'new_non_mute',
+          type: 'data_record',
+          form: 'definitely-not-mute',
+          contact: { _id: 'contact_id' },
+          fields: {
+            patient_id: 'patient2',
+          }
+        };
+        const docs = [ validMutingReport, nonMutingReport ];
 
+        lineageModelGenerator.docs.resolves([validHydratedReport]);
+        dbService.query.withArgs('medic-client/contacts_by_place').resolves({ rows: [] });
+        dbService.get.withArgs(minifiedPatient._id).resolves(minifiedPatient);
+        contactMutedService.getMuted.returns(false);
+
+        const updatedDocs = await transition.run(docs);
+
+        expect(lineageModelGenerator.docs.callCount).to.equal(1);
+        expect(lineageModelGenerator.docs.args[0]).to.deep.equal([[validMutingReportWithoutContact]]);
+        expect(dbService.query.callCount).to.equal(1);
+        expect(dbService.query.args[0]).to.deep.equal([
+          'medic-client/contacts_by_place',
+          { key: [minifiedPatient._id], include_docs: true },
+        ]);
+        expect(dbService.get.callCount).to.equal(1);
+        expect(dbService.get.args[0]).to.deep.equal([minifiedPatient._id]);
+        expect(contactMutedService.getMuted.callCount).to.equal(1);
+        expect(contactMutedService.getMuted.args[0]).to.deep.equal([validHydratedReport.patient]);
+
+        expect(updatedDocs).to.deep.equal([
+          transitionedValidMutingReport,
+          {
+            _id: 'new_non_mute',
+            type: 'data_record',
+            form: 'definitely-not-mute',
+            contact: { _id: 'contact_id' },
+            fields: {
+              patient_id: 'patient2',
+            }
+          },
+          transitionedPatient(now),
+        ]);
       });
 
-      it('should skip edited contacts', () => {
+      it('should skip invalid reports', async () => {
+        const now = 12345;
+        clock.tick(now);
+        const invalidMutingReport = {
+          _id: 'new_invalid_mute',
+          type: 'data_record',
+          form: 'mute',
+          contact: { _id: 'contact_id' },
+          fields: {
+            patient_id: 'patient2',
+          }
+        };
+        const docs = [ validMutingReport, invalidMutingReport ];
 
+        lineageModelGenerator.docs.resolves([validHydratedReport]);
+        dbService.query.withArgs('medic-client/contacts_by_place').resolves({ rows: [] });
+        dbService.get.withArgs(minifiedPatient._id).resolves(minifiedPatient);
+        contactMutedService.getMuted.returns(false);
+        validationService.validate.withArgs(invalidMutingReport).returns([ 'error' ]);
+
+        const updatedDocs = await transition.run(docs);
+
+        expect(lineageModelGenerator.docs.callCount).to.equal(1);
+        expect(lineageModelGenerator.docs.args[0]).to.deep.equal([[validMutingReportWithoutContact]]);
+        expect(dbService.query.callCount).to.equal(1);
+        expect(dbService.query.args[0]).to.deep.equal([
+          'medic-client/contacts_by_place',
+          { key: [minifiedPatient._id], include_docs: true },
+        ]);
+        expect(dbService.get.callCount).to.equal(1);
+        expect(dbService.get.args[0]).to.deep.equal([minifiedPatient._id]);
+        expect(contactMutedService.getMuted.callCount).to.equal(1);
+        expect(contactMutedService.getMuted.args[0]).to.deep.equal([validHydratedReport.patient]);
+        expect(validationService.validate.callCount).to.equal(2);
+        expect(validationService.validate.args).to.deep.equal([
+          [ validMutingReport, settings.muting ],
+          [ invalidMutingReport, settings.muting ],
+        ]);
+
+        expect(updatedDocs).to.deep.equal([
+          transitionedValidMutingReport,
+          {
+            _id: 'new_invalid_mute',
+            type: 'data_record',
+            form: 'mute',
+            contact: { _id: 'contact_id' },
+            fields: {
+              patient_id: 'patient2',
+            }
+          },
+          transitionedPatient(now),
+        ]);
+      });
+
+      it('should skip edited contacts', async () => {
+        const now = 457385943;
+        clock.tick(now);
+        const docs = [
+          {
+            _id: 'new_clinic',
+            name: 'clinic',
+            type: 'clinic',
+            parent: { _id: 'hc', parent: { _id: 'district' } },
+          },
+          {
+            _id: 'old_person',
+            _rev: '12-fdsfs',
+            name: 'contact',
+            type: 'person',
+            parent: { _id: 'hc', parent: { _id: 'district' } },
+          }
+        ];
+
+        const hydratedContacts = [
+          {
+            _id: 'new_clinic',
+            name: 'clinic',
+            type: 'clinic',
+            parent: {
+              _id: 'hc',
+              name: 'hc',
+              type: 'hc',
+              muted: 4000,
+              parent: {
+                _id: 'district',
+                name: 'district',
+                type: 'district',
+                muted: 1230,
+              },
+            },
+          },
+        ];
+
+        lineageModelGenerator.docs.resolves(hydratedContacts);
+        contactMutedService.getMutedParent.returns(hydratedContacts[0].parent);
+
+        const updatedDocs = await transition.run(docs);
+
+        expect(lineageModelGenerator.docs.callCount).to.equal(1);
+        expect(lineageModelGenerator.docs.args[0]).to.deep.equal([[docs[0]]]);
+        expect(contactMutedService.getMutedParent.callCount).to.equal(1);
+        expect(contactMutedService.getMutedParent.args[0]).to.deep.equal([
+          hydratedContacts[0],
+          [hydratedContacts[0].parent, hydratedContacts[0].parent.parent],
+        ]);
+
+        const muteTime = new Date(now).toISOString();
+        expect(updatedDocs).to.deep.equal([
+          {
+            _id: 'new_clinic',
+            name: 'clinic',
+            type: 'clinic',
+            parent: { _id: 'hc', parent: { _id: 'district' } },
+            muted: muteTime,
+            muting_history: {
+              online: { muted: false, date: undefined },
+              offline: [{ muted: true, date: muteTime, report_id: undefined }],
+              last_update: 'offline',
+            },
+          },
+          {
+            _id: 'old_person',
+            _rev: '12-fdsfs',
+            name: 'contact',
+            type: 'person',
+            parent: { _id: 'hc', parent: { _id: 'district' } },
+          },
+        ]);
       });
     });
 
     describe('weird cases', () => {
-      it('should only unmute when both mute and unmute forms exist in the same batch', () => {
+      beforeEach(() => {
+        contactMutedService.getMutedParent.callsFake((contact, lineage) => {
+          if (contact.muted) {
+            return contact;
+          }
+
+          if (lineage) {
+            return lineage.find(parent => parent.muted);
+          }
+
+          let parent = contact;
+          while (parent) {
+            if (parent.muted) {
+              return parent;
+            }
+            parent = parent.parent;
+          }
+        });
+      });
+
+      it('should only unmute when both mute and unmute forms exist in the same batch', async () => {
+        const now = 5000;
+        clock.tick(now);
+        const docs = [
+          {
+            _id: 'a_report',
+            type: 'data_record',
+            form: 'unmute',
+            contact: { _id: 'contact_id' },
+            fields: {
+              patient_id: 'shortcode',
+            }
+          },
+          {
+            _id: 'b_report',
+            type: 'data_record',
+            form: 'mute',
+            contact: { _id: 'contact_id' },
+            fields: {
+              patient_id: 'shortcode',
+            }
+          },
+        ];
+
+        const hydratedReport = {
+          _id: 'a_report',
+          type: 'data_record',
+          form: 'unmute',
+          fields: {
+            patient_id: 'shortcode',
+          },
+          patient: {
+            _id: 'patient',
+            name: 'patient name',
+            type: 'person',
+            muted: 6000,
+            patient_id: 'shortcode',
+            parent: {
+              _id: 'parent',
+              name: 'parent',
+            }
+          },
+        };
+        const minifiedPatient = {
+          _id: 'patient',
+          name: 'patient name',
+          type: 'person',
+          muted: 6000,
+          patient_id: 'shortcode',
+          parent: { _id: 'parent' },
+        };
+        lineageModelGenerator.docs.resolves([hydratedReport]);
+        dbService.query.withArgs('medic-client/contacts_by_place').resolves({ rows: [] });
+        dbService.get.withArgs('patient').resolves(minifiedPatient);
+        contactMutedService.getMuted.returns(true);
+
+        const updatedDocs = await transition.run(docs);
+
+        expect(lineageModelGenerator.docs.callCount).to.equal(1);
+
+        expect(lineageModelGenerator.docs.args[0]).to.deep.equal([[{
+          _id: 'a_report',
+          type: 'data_record',
+          form: 'unmute',
+          fields: {
+            patient_id: 'shortcode',
+          }
+        }]]);
+        expect(dbService.query.callCount).to.equal(1);
+        expect(dbService.query.args[0]).to.deep.equal([
+          'medic-client/contacts_by_place',
+          { key: ['patient'], include_docs: true },
+        ]);
+        expect(dbService.get.callCount).to.equal(1);
+        expect(dbService.get.args[0]).to.deep.equal(['patient']);
+        expect(contactMutedService.getMuted.callCount).to.equal(1);
+        expect(contactMutedService.getMuted.args[0]).to.deep.equal([hydratedReport.patient]);
+
+        expect(updatedDocs).to.deep.equal([
+          {
+            _id: 'a_report',
+            type: 'data_record',
+            form: 'unmute',
+            contact: { _id: 'contact_id' },
+            fields: {
+              patient_id: 'shortcode',
+            },
+            offline_transitions: { muting: true },
+          },
+          {
+            _id: 'b_report',
+            type: 'data_record',
+            form: 'mute',
+            contact: { _id: 'contact_id' },
+            fields: {
+              patient_id: 'shortcode',
+            }
+          },
+          {
+            _id: 'patient',
+            name: 'patient name',
+            type: 'person',
+            parent: { _id: 'parent' },
+            patient_id: 'shortcode',
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: true, date: 6000 },
+              offline: [{
+                muted: false,
+                date: new Date(now).toISOString(),
+                report_id: 'a_report'
+              }]
+            },
+          }
+        ]);
+      });
+
+      it('create new place + new person in place + mute place', async () => {
+        const date = 123456;
+        clock.tick(date);
+        const docs = [
+          {
+            _id: 'new_place',
+            type: 'clinic',
+            name: 'clinic',
+            parent: { _id: 'parent' },
+          },
+          {
+            _id: 'new_person',
+            type: 'person',
+            name: 'person',
+            parent: { _id: 'new_place', parent: { _id: 'parent' } },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'mute',
+            fields: { place_id: 'new_place' },
+          },
+        ];
+
+        const hydratedDocs = [
+          {
+            _id: 'new_place',
+            type: 'clinic',
+            name: 'clinic',
+            parent: { _id: 'parent', type: 'hc' },
+          },
+          {
+            _id: 'new_person',
+            type: 'person',
+            name: 'person',
+            parent: {
+              _id: 'new_place',
+              type: 'clinic',
+              name: 'clinic',
+              parent: { _id: 'parent', type: 'hc' },
+            },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'mute',
+            fields: { place_id: 'new_place' },
+            place: {
+              _id: 'new_place',
+              type: 'clinic',
+              name: 'clinic',
+              parent: { _id: 'parent', type: 'hc' },
+            },
+          }
+        ];
+
+        lineageModelGenerator.docs.resolves(hydratedDocs);
+        dbService.query.withArgs('medic-client/contacts_by_place').resolves({ rows: [] });
+
+        const updatedDocs = await transition.run(docs);
+
+        expect(lineageModelGenerator.docs.callCount).to.equal(1);
+        expect(dbService.query.callCount).to.equal(1);
+        expect(dbService.query.args[0][1].key).to.deep.equal(['new_place']);
+        expect(dbService.get.callCount).to.equal(0);
+
+        const mutingDate = new Date(date).toISOString();
+
+        expect(updatedDocs).to.deep.equal([
+          {
+            _id: 'new_place',
+            type: 'clinic',
+            name: 'clinic',
+            parent: { _id: 'parent' },
+            muted: mutingDate,
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: false, date: undefined },
+              offline: [{ muted: true, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'new_person',
+            type: 'person',
+            name: 'person',
+            parent: { _id: 'new_place', parent: { _id: 'parent' } },
+            muted: mutingDate,
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: false, date: undefined },
+              offline: [{ muted: true, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'mute',
+            fields: { place_id: 'new_place' },
+            offline_transitions: { muting: true },
+          },
+        ]);
+      });
+
+      it('create new place + new persons in place + mute place', async () => {
+        const date = 123456;
+        clock.tick(date);
+        const docs = [
+          {
+            _id: 'new_place',
+            type: 'clinic',
+            name: 'clinic',
+            parent: { _id: 'parent' },
+          },
+          {
+            _id: 'new_person1',
+            type: 'person',
+            name: 'person',
+            parent: { _id: 'new_place', parent: { _id: 'parent' } },
+          },
+          {
+            _id: 'new_person2',
+            type: 'person',
+            name: 'person',
+            parent: { _id: 'new_place', parent: { _id: 'parent' } },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'mute',
+            fields: { place_id: 'new_place' },
+          },
+        ];
+
+        const hydratedDocs = [
+          {
+            _id: 'new_place',
+            type: 'clinic',
+            name: 'clinic',
+            parent: { _id: 'parent', type: 'hc' },
+          },
+          {
+            _id: 'new_person1',
+            type: 'person',
+            name: 'person',
+            parent: {
+              _id: 'new_place',
+              type: 'clinic',
+              name: 'clinic',
+              parent: { _id: 'parent', type: 'hc' },
+            },
+          },
+          {
+            _id: 'new_person2',
+            type: 'person',
+            name: 'person',
+            parent: {
+              _id: 'new_place',
+              type: 'clinic',
+              name: 'clinic',
+              parent: { _id: 'parent', type: 'hc' },
+            },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'mute',
+            fields: { place_id: 'new_place' },
+            place: {
+              _id: 'new_place',
+              type: 'clinic',
+              name: 'clinic',
+              parent: { _id: 'parent', type: 'hc' },
+            },
+          }
+        ];
+
+        lineageModelGenerator.docs.resolves(hydratedDocs);
+        dbService.query.withArgs('medic-client/contacts_by_place').resolves({ rows: [] });
+
+        const updatedDocs = await transition.run(docs);
+
+        expect(lineageModelGenerator.docs.callCount).to.equal(1);
+        expect(dbService.query.callCount).to.equal(1);
+        expect(dbService.query.args[0][1].key).to.deep.equal(['new_place']);
+        expect(dbService.get.callCount).to.equal(0);
+
+        const mutingDate = new Date(date).toISOString();
+
+        expect(updatedDocs).to.deep.equal([
+          {
+            _id: 'new_place',
+            type: 'clinic',
+            name: 'clinic',
+            parent: { _id: 'parent' },
+            muted: mutingDate,
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: false, date: undefined },
+              offline: [{ muted: true, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'new_person1',
+            type: 'person',
+            name: 'person',
+            parent: { _id: 'new_place', parent: { _id: 'parent' } },
+            muted: mutingDate,
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: false, date: undefined },
+              offline: [{ muted: true, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'new_person2',
+            type: 'person',
+            name: 'person',
+            parent: { _id: 'new_place', parent: { _id: 'parent' } },
+            muted: mutingDate,
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: false, date: undefined },
+              offline: [{ muted: true, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'mute',
+            fields: { place_id: 'new_place' },
+            offline_transitions: { muting: true },
+          },
+        ]);
+      });
+
+      it('should create new place, new person in place, new person in other place, and mute place', async () => {
+        const date = 123456;
+        clock.tick(date);
+        const docs = [
+          {
+            _id: 'new_place',
+            type: 'clinic',
+            name: 'clinic',
+            parent: { _id: 'parent' },
+          },
+          {
+            _id: 'new_person1',
+            type: 'person',
+            name: 'person',
+            parent: { _id: 'new_place', parent: { _id: 'parent' } },
+          },
+          {
+            _id: 'new_person2',
+            type: 'person',
+            name: 'person',
+            parent: { _id: 'old_place', parent: { _id: 'parent' } },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'mute',
+            fields: { place_id: 'new_place' },
+          },
+        ];
+
+        const hydratedDocs = [
+          {
+            _id: 'new_place',
+            type: 'clinic',
+            name: 'clinic',
+            parent: { _id: 'parent', type: 'hc' },
+          },
+          {
+            _id: 'new_person1',
+            type: 'person',
+            name: 'person',
+            parent: {
+              _id: 'new_place',
+              type: 'clinic',
+              name: 'clinic',
+              parent: { _id: 'parent', type: 'hc' },
+            },
+          },
+          {
+            _id: 'new_person2',
+            type: 'person',
+            name: 'person',
+            parent: {
+              _id: 'old_place',
+              type: 'clinic',
+              name: 'clinic',
+              parent: { _id: 'parent', type: 'hc' },
+            },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'mute',
+            fields: { place_id: 'new_place' },
+            place: {
+              _id: 'new_place',
+              type: 'clinic',
+              name: 'clinic',
+              parent: { _id: 'parent', type: 'hc' },
+            },
+          }
+        ];
+
+        lineageModelGenerator.docs.resolves(hydratedDocs);
+        dbService.query.withArgs('medic-client/contacts_by_place').resolves({ rows: [] });
+
+        const updatedDocs = await transition.run(docs);
+
+        expect(lineageModelGenerator.docs.callCount).to.equal(1);
+        expect(dbService.query.callCount).to.equal(1);
+        expect(dbService.query.args[0][1].key).to.deep.equal(['new_place']);
+        expect(dbService.get.callCount).to.equal(0);
+
+        const mutingDate = new Date(date).toISOString();
+
+        expect(updatedDocs).to.deep.equal([
+          {
+            _id: 'new_place',
+            type: 'clinic',
+            name: 'clinic',
+            parent: { _id: 'parent' },
+            muted: mutingDate,
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: false, date: undefined },
+              offline: [{ muted: true, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'new_person1',
+            type: 'person',
+            name: 'person',
+            parent: { _id: 'new_place', parent: { _id: 'parent' } },
+            muted: mutingDate,
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: false, date: undefined },
+              offline: [{ muted: true, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'new_person2',
+            type: 'person',
+            name: 'person',
+            parent: { _id: 'old_place', parent: { _id: 'parent' } },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'mute',
+            fields: { place_id: 'new_place' },
+            offline_transitions: { muting: true },
+          },
+        ]);
+      });
+
+      it('should create new person and mute person\'s parent', async () => {
+        const date = 123456;
+        clock.tick(date);
+        const docs = [
+          {
+            _id: 'new_person',
+            type: 'person',
+            name: 'person',
+            parent: { _id: 'old_place', parent: { _id: 'parent' } },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'mute',
+            fields: { place_id: 'old_place' },
+          },
+        ];
+
+        const hydratedDocs = [
+          {
+            _id: 'new_person',
+            type: 'person',
+            name: 'person',
+            parent: {
+              _id: 'old_place',
+              type: 'clinic',
+              name: 'clinic',
+              parent: { _id: 'parent', type: 'hc' },
+            },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'mute',
+            fields: { place_id: 'old_place' },
+            place: {
+              _id: 'old_place',
+              type: 'clinic',
+              name: 'clinic',
+              parent: { _id: 'parent', type: 'hc' },
+            },
+          }
+        ];
+
+        lineageModelGenerator.docs.resolves(hydratedDocs);
+        contactMutedService.getMuted.returns(false);
+        dbService.query.withArgs('medic-client/contacts_by_place').resolves({
+          rows: [
+            { id: 'old_person1', doc: { _id: 'old_person1', parent: { _id: 'old_place' }, type: 'person' } },
+            { id: 'old_person2', doc: { _id: 'old_person2', parent: { _id: 'old_place' }, type: 'person' } },
+          ]
+        });
+        dbService.get.withArgs('old_place').resolves({
+          _id: 'old_place',
+          type: 'clinic',
+          name: 'clinic',
+          parent: { _id: 'parent' },
+        });
+
+        const updatedDocs = await transition.run(docs);
+
+        expect(lineageModelGenerator.docs.callCount).to.equal(1);
+        expect(dbService.query.callCount).to.equal(1);
+        expect(dbService.query.args[0][1].key).to.deep.equal(['old_place']);
+        expect(dbService.get.callCount).to.equal(1);
+
+        const mutingDate = new Date(date).toISOString();
+
+        expect(updatedDocs).to.deep.equal([
+          {
+            _id: 'new_person',
+            type: 'person',
+            name: 'person',
+            parent: { _id: 'old_place', parent: { _id: 'parent' } },
+            muted: mutingDate,
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: false, date: undefined },
+              offline: [{ muted: true, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'mute',
+            fields: { place_id: 'old_place' },
+            offline_transitions: { muting: true },
+          },
+          {
+            _id: 'old_person1',
+            parent: { _id: 'old_place' },
+            type: 'person',
+            muted: mutingDate,
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: false, date: undefined },
+              offline: [{ muted: true, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'old_person2',
+            parent: { _id: 'old_place' },
+            type: 'person',
+            muted: mutingDate,
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: false, date: undefined },
+              offline: [{ muted: true, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'old_place',
+            type: 'clinic',
+            name: 'clinic',
+            parent: { _id: 'parent' },
+            muted: mutingDate,
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: false, date: undefined },
+              offline: [{ muted: true, date: mutingDate, report_id: 'new_report' }],
+            },
+          }
+        ]);
+      });
+
+      it('create new person and mute person', async () => {
+        const date = 123456;
+        clock.tick(date);
+        const docs = [
+          {
+            _id: 'new_person',
+            type: 'person',
+            name: 'person',
+            parent: { _id: 'old_place', parent: { _id: 'parent' } },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'mute',
+            fields: { patient_uuid: 'new_person' },
+          },
+        ];
+
+        const hydratedDocs = [
+          {
+            _id: 'new_person',
+            type: 'person',
+            name: 'person',
+            parent: {
+              _id: 'old_place',
+              type: 'clinic',
+              name: 'clinic',
+              parent: { _id: 'parent', type: 'hc' },
+            },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'mute',
+            fields: { place_id: 'old_place' },
+            patient: {
+              _id: 'new_person',
+              type: 'person',
+              name: 'person',
+              parent: {
+                _id: 'old_place',
+                type: 'clinic',
+                name: 'clinic',
+                parent: { _id: 'parent', type: 'hc' },
+              },
+            },
+          }
+        ];
+
+        lineageModelGenerator.docs.resolves(hydratedDocs);
+        contactMutedService.getMuted.returns(false);
+        dbService.query.withArgs('medic-client/contacts_by_place').resolves({ rows: [] });
+
+        const updatedDocs = await transition.run(docs);
+
+        expect(lineageModelGenerator.docs.callCount).to.equal(1);
+        expect(dbService.query.callCount).to.equal(1);
+        expect(dbService.query.args[0][1].key).to.deep.equal(['new_person']);
+        expect(dbService.get.callCount).to.equal(0);
+
+        const mutingDate = new Date(date).toISOString();
+
+        expect(updatedDocs).to.deep.equal([
+          {
+            _id: 'new_person',
+            type: 'person',
+            name: 'person',
+            parent: { _id: 'old_place', parent: { _id: 'parent' } },
+            muted: mutingDate,
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: false, date: undefined },
+              offline: [{ muted: true, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'mute',
+            fields: { patient_uuid: 'new_person' },
+            offline_transitions: { muting: true },
+          },
+        ]);
+      });
+
+      it('create new person in muted place and unmute person', async () => {
+        const date = 123456;
+        clock.tick(date);
+
+        const docs = [
+          {
+            _id: 'new_person',
+            type: 'person',
+            parent: { _id: 'old_place', parent: { _id: 'district' } },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'unmute',
+            fields: { patient_uuid: 'new_person' },
+          },
+        ];
+
+        const hydratedDocs = [
+          {
+            _id: 'new_person',
+            type: 'person',
+            name: 'person',
+            parent: {
+              _id: 'old_place',
+              type: 'clinic',
+              muted: 100,
+              parent: {
+                _id: 'district',
+                type: 'district',
+                muted: 100,
+              },
+            },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'unmute',
+            fields: { patient_uuid: 'new_person' },
+            patient: {
+              _id: 'new_person',
+              type: 'person',
+              name: 'person',
+              parent: {
+                _id: 'old_place',
+                type: 'clinic',
+                muted: 100,
+                parent: {
+                  _id: 'district',
+                  type: 'district',
+                  muted: 100,
+                },
+              },
+            },
+          }
+        ];
+
+        lineageModelGenerator.docs.resolves(hydratedDocs);
+        contactMutedService.getMuted.returns(true);
+        dbService.query.withArgs('medic-client/contacts_by_place').resolves({
+          rows: [
+            { id: 'old_place', doc: { _id: 'old_place', type: 'clinic', muted: 100, parent: { _id: 'district' } } },
+            { id: 'contact1', doc: { _id: 'contact1', type: 'person', muted: 100, parent: { _id: 'district' } } },
+            { id: 'old_place2', doc: { _id: 'old_place2', type: 'clinic', muted: 100, parent: { _id: 'district' } } },
+          ],
+        });
+        dbService.get.withArgs('district').resolves({
+          _id: 'district',
+          type: 'district',
+          muted: 100,
+        });
+
+        const updatedDocs = await transition.run(docs);
+
+        expect(lineageModelGenerator.docs.callCount).to.equal(1);
+        expect(dbService.query.callCount).to.equal(1);
+        expect(dbService.query.args[0][1].key).to.deep.equal(['district']);
+        expect(dbService.get.callCount).to.equal(1);
+
+        const mutingDate = new Date(date).toISOString();
+        expect(updatedDocs).to.deep.equal([
+          {
+            _id: 'new_person',
+            type: 'person',
+            parent: { _id: 'old_place', parent: { _id: 'district' } },
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: false, date: undefined },
+              offline: [{ muted: false, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'unmute',
+            fields: { patient_uuid: 'new_person' },
+            offline_transitions: { muting: true },
+          },
+          {
+            _id: 'old_place',
+            type: 'clinic',
+            parent: { _id: 'district' },
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: true, date: 100 },
+              offline: [{ muted: false, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'contact1',
+            type: 'person',
+            parent: { _id: 'district' },
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: true, date: 100 },
+              offline: [{ muted: false, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'old_place2',
+            type: 'clinic',
+            parent: { _id: 'district' },
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: true, date: 100 },
+              offline: [{ muted: false, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'district',
+            type: 'district',
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: true, date: 100 },
+              offline: [{ muted: false, date: mutingDate, report_id: 'new_report' }],
+            },
+          }
+        ]);
+      });
+
+      it('should create new person in muted place and unmute place', async () => {
+        const date = 123456;
+        clock.tick(date);
+
+        const docs = [
+          {
+            _id: 'new_person',
+            type: 'person',
+            parent: { _id: 'old_place', parent: { _id: 'district' } },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'unmute',
+            fields: { place_id: 'old_place' },
+          },
+        ];
+
+        const hydratedDocs = [
+          {
+            _id: 'new_person',
+            type: 'person',
+            name: 'person',
+            parent: {
+              _id: 'old_place',
+              type: 'clinic',
+              muted: 100,
+              parent: {
+                _id: 'district',
+                type: 'district',
+                muted: 100,
+              },
+            },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'unmute',
+            fields: { patient_uuid: 'new_person' },
+            patient: {
+              _id: 'new_person',
+              type: 'person',
+              name: 'person',
+              parent: {
+                _id: 'old_place',
+                type: 'clinic',
+                muted: 100,
+                parent: {
+                  _id: 'district',
+                  type: 'district',
+                  muted: 100,
+                },
+              },
+            },
+          }
+        ];
+
+        lineageModelGenerator.docs.resolves(hydratedDocs);
+        contactMutedService.getMuted.returns(true);
+        dbService.query.withArgs('medic-client/contacts_by_place').resolves({
+          rows: [
+            { id: 'old_place', doc: { _id: 'old_place', type: 'clinic', muted: 100, parent: { _id: 'district' } } },
+            { id: 'contact1', doc: { _id: 'contact1', type: 'person', muted: 100, parent: { _id: 'district' } } },
+            { id: 'old_place2', doc: { _id: 'old_place2', type: 'clinic', muted: 100, parent: { _id: 'district' } } },
+          ],
+        });
+        dbService.get.withArgs('district').resolves({
+          _id: 'district',
+          type: 'district',
+          muted: 100,
+        });
+
+        const updatedDocs = await transition.run(docs);
+
+        expect(lineageModelGenerator.docs.callCount).to.equal(1);
+        expect(dbService.query.callCount).to.equal(1);
+        expect(dbService.query.args[0][1].key).to.deep.equal(['district']);
+        expect(dbService.get.callCount).to.equal(1);
+
+        const mutingDate = new Date(date).toISOString();
+        expect(updatedDocs).to.deep.equal([
+          {
+            _id: 'new_person',
+            type: 'person',
+            parent: { _id: 'old_place', parent: { _id: 'district' } },
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: false, date: undefined },
+              offline: [{ muted: false, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'unmute',
+            fields: { place_id: 'old_place' },
+            offline_transitions: { muting: true },
+          },
+          {
+            _id: 'old_place',
+            type: 'clinic',
+            parent: { _id: 'district' },
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: true, date: 100 },
+              offline: [{ muted: false, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'contact1',
+            type: 'person',
+            parent: { _id: 'district' },
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: true, date: 100 },
+              offline: [{ muted: false, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'old_place2',
+            type: 'clinic',
+            parent: { _id: 'district' },
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: true, date: 100 },
+              offline: [{ muted: false, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'district',
+            type: 'district',
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: true, date: 100 },
+              offline: [{ muted: false, date: mutingDate, report_id: 'new_report' }],
+            },
+          }
+        ]);
+      });
+
+      it('create new place + new person under muted place and unmute new person', async () => {
+        const date = 698841265;
+        clock.tick(date);
+        const mutingDate = new Date(date).toISOString();
+
+        const docs = [
+          {
+            _id: 'new_person',
+            type: 'person',
+            parent: { _id: 'new_place', parent: { _id: 'parent' } },
+          },
+          {
+            _id: 'new_place',
+            type: 'clinic',
+            parent: { _id: 'parent' },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'unmute',
+            fields: { patient_uuid: 'new_person' },
+          },
+        ];
+
+        const hydratedDocs = [
+          {
+            _id: 'new_person',
+            type: 'person',
+            parent: {
+              _id: 'new_place',
+              type: 'clinic',
+              parent: { _id: 'parent', muted: 400, type: 'district' },
+            },
+          },
+          {
+            _id: 'new_place',
+            type: 'clinic',
+            parent: { _id: 'parent', muted: 400, type: 'district' },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'unmute',
+            fields: { patient_uuid: 'new_person' },
+            patient: {
+              _id: 'new_person',
+              type: 'person',
+              parent: {
+                _id: 'new_place',
+                type: 'clinic',
+                parent: { _id: 'parent', muted: 400, type: 'district' },
+              },
+            },
+          },
+        ];
+
+        lineageModelGenerator.docs.resolves(hydratedDocs);
+        contactMutedService.getMuted.returns(true);
+        dbService.query.withArgs('medic-client/contacts_by_place').resolves({
+          rows: [
+            { id: 'old_contact', doc: { _id: 'old_contact', type: 'person', muted: 400, parent: { _id: 'parent' } } },
+          ],
+        });
+        dbService.get.withArgs('parent').resolves({
+          _id: 'parent',
+          type: 'district',
+          muted: 400,
+        });
+
+        const updatedDocs = await transition.run(docs);
+
+        expect(lineageModelGenerator.docs.callCount).to.equal(1);
+        expect(dbService.query.callCount).to.equal(1);
+        expect(dbService.query.args[0][1].key).to.deep.equal(['parent']);
+        expect(dbService.get.callCount).to.equal(1);
+
+        expect(updatedDocs).to.deep.equal([
+          {
+            _id: 'new_person',
+            type: 'person',
+            parent: { _id: 'new_place', parent: { _id: 'parent' } },
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: false, date: undefined },
+              offline: [{ muted: false, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'new_place',
+            type: 'clinic',
+            parent: { _id: 'parent' },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'unmute',
+            fields: { patient_uuid: 'new_person' },
+            offline_transitions: { muting: true },
+          },
+          {
+            _id: 'old_contact',
+            type: 'person',
+            parent: { _id: 'parent' },
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: true, date: 400 },
+              offline: [{ muted: false, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'parent',
+            type: 'district',
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: true, date: 400 },
+              offline: [{ muted: false, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+        ]);
 
       });
 
-      it('create new place + new person in place + mute place', () => {
+      it('create new place + new person under muted place and unmute old place', async () => {
+        const date = 698841265;
+        clock.tick(date);
+        const mutingDate = new Date(date).toISOString();
 
+        const docs = [
+          {
+            _id: 'new_person',
+            type: 'person',
+            parent: { _id: 'new_place', parent: { _id: 'parent' } },
+          },
+          {
+            _id: 'new_place',
+            type: 'clinic',
+            parent: { _id: 'parent' },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'unmute',
+            fields: { place_id: 'parent' },
+          },
+        ];
+
+        const hydratedDocs = [
+          {
+            _id: 'new_person',
+            type: 'person',
+            parent: {
+              _id: 'new_place',
+              type: 'clinic',
+              parent: { _id: 'parent', muted: 400, type: 'district' },
+            },
+          },
+          {
+            _id: 'new_place',
+            type: 'clinic',
+            parent: { _id: 'parent', muted: 400, type: 'district' },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'unmute',
+            fields: { place_id: 'parent' },
+            place: { _id: 'parent', muted: 400, type: 'district' },
+          },
+        ];
+
+        lineageModelGenerator.docs.resolves(hydratedDocs);
+        contactMutedService.getMuted.returns(true);
+        dbService.query.withArgs('medic-client/contacts_by_place').resolves({
+          rows: [
+            { id: 'old_contact', doc: { _id: 'old_contact', type: 'person', muted: 400, parent: { _id: 'parent' } } },
+          ],
+        });
+        dbService.get.withArgs('parent').resolves({
+          _id: 'parent',
+          type: 'district',
+          muted: 400,
+        });
+
+        const updatedDocs = await transition.run(docs);
+
+        expect(lineageModelGenerator.docs.callCount).to.equal(1);
+        expect(dbService.query.callCount).to.equal(1);
+        expect(dbService.query.args[0][1].key).to.deep.equal(['parent']);
+        expect(dbService.get.callCount).to.equal(1);
+
+        expect(updatedDocs).to.deep.equal([
+          {
+            _id: 'new_person',
+            type: 'person',
+            parent: { _id: 'new_place', parent: { _id: 'parent' } },
+          },
+          {
+            _id: 'new_place',
+            type: 'clinic',
+            parent: { _id: 'parent' },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'unmute',
+            fields: { place_id: 'parent' },
+            offline_transitions: { muting: true },
+          },
+          {
+            _id: 'old_contact',
+            type: 'person',
+            parent: { _id: 'parent' },
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: true, date: 400 },
+              offline: [{ muted: false, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'parent',
+            type: 'district',
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: true, date: 400 },
+              offline: [{ muted: false, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+        ]);
       });
 
-      it('create new place + new persons in place + mute place', () => {
+      it('create two new persons under muted place and unmute one of them', async () => {
+        const date = 698841265;
+        clock.tick(date);
+        const mutingDate = new Date(date).toISOString();
 
-      });
+        const docs = [
+          {
+            _id: 'new_person1',
+            type: 'person',
+            parent: { _id: 'old_place', parent: { _id: 'parent' } },
+          },
+          {
+            _id: 'new_person2',
+            type: 'person',
+            parent: { _id: 'old_place', parent: { _id: 'parent' } },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'unmute',
+            fields: { patient_uuid: 'new_person2' },
+          },
+        ];
 
-      it('should create new person and mute person parent', () => {
+        const hydratedDocs = [
+          {
+            _id: 'new_person1',
+            type: 'person',
+            parent: {
+              _id: 'old_place',
+              muted: 500,
+              parent: {
+                _id: 'parent'
+              },
+            },
+          },
+          {
+            _id: 'new_person2',
+            type: 'person',
+            parent: {
+              _id: 'old_place',
+              muted: 500,
+              parent: {
+                _id: 'parent'
+              },
+            },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'unmute',
+            fields: { patient_uuid: 'new_person2' },
+            patient: {
+              _id: 'new_person2',
+              type: 'person',
+              parent: {
+                _id: 'old_place',
+                muted: 500,
+                parent: {
+                  _id: 'parent'
+                },
+              },
+            },
+          },
+        ];
 
-      });
+        lineageModelGenerator.docs.resolves(hydratedDocs);
+        contactMutedService.getMuted.returns(true);
+        dbService.query.withArgs('medic-client/contacts_by_place').resolves({
+          rows: [
+            { id: 'old_contact', doc: { _id: 'old_contact', type: 'person', muted: 400, parent: { _id: 'old_place' } } }
+          ],
+        });
+        dbService.get.withArgs('old_place').resolves({
+          _id: 'old_place',
+          muted: 500,
+          parent: { _id: 'parent' },
+        });
 
-      it('create new person and mute person', () => {
+        const updatedDocs = await transition.run(docs);
 
-      });
+        expect(lineageModelGenerator.docs.callCount).to.equal(1);
+        expect(dbService.query.callCount).to.equal(1);
+        expect(dbService.query.args[0][1].key).to.deep.equal(['old_place']);
+        expect(dbService.get.callCount).to.equal(1);
 
-      it('create new person in muted place and unmute person', () => {
-
-      });
-
-      it('should create new person in muted place and unkute place', () => {
-
-      });
-
-      it('create new place + new person under muted place and unmute new person', () => {
-
-      });
-
-      it('create new place + new person under muted place and unmute old place', () => {
-
-      });
-
-      it('create two new persons under muted place and unmute one of them', () => {
-
+        expect(updatedDocs).to.deep.equal([
+          {
+            _id: 'new_person1',
+            type: 'person',
+            parent: { _id: 'old_place', parent: { _id: 'parent' } },
+          },
+          {
+            _id: 'new_person2',
+            type: 'person',
+            parent: { _id: 'old_place', parent: { _id: 'parent' } },
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: false, date: undefined },
+              offline: [{ muted: false, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'new_report',
+            type: 'data_record',
+            form: 'unmute',
+            fields: { patient_uuid: 'new_person2' },
+            offline_transitions: { muting: true },
+          },
+          {
+            _id: 'old_contact',
+            type: 'person',
+            parent: { _id: 'old_place' },
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: true, date: 400 },
+              offline: [{ muted: false, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+          {
+            _id: 'old_place',
+            parent: { _id: 'parent' },
+            muting_history: {
+              last_update: 'offline',
+              online: { muted: true, date: 500 },
+              offline: [{ muted: false, date: mutingDate, report_id: 'new_report' }],
+            },
+          },
+        ]);
       });
     });
   });
