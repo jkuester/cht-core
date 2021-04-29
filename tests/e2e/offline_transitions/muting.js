@@ -124,7 +124,13 @@ describe('Muting', () => {
 
   const submitMutingForm = async (name, form, sync = false) =>  {
     await commonElements.goToPeople();
-    await contactsObjects.selectLHSRowByText(name);
+    try {
+      await contactsObjects.selectLHSRowByText(name);
+    } catch(err) {
+      console.warn('Failed loading contact', err);
+      await contactsObjects.selectLHSRowByText(name);
+    }
+
     await formsUtils.openForm(form);
     await formsUtils.submit();
     sync && await commonElements.syncNative();
