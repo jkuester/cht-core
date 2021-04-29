@@ -9,6 +9,7 @@ const contactsObjects = require('../../page-objects/contacts/contacts.po');
 const sentinelUtils = require('../sentinel/utils');
 const formsUtils = require('./forms');
 
+
 describe('Muting', () => {
   const password = 'Sup3rSecret!';
   const DISTRICT = {
