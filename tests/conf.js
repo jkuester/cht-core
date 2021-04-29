@@ -19,7 +19,7 @@ const baseConfig = {
   SELENIUM_PROMISE_MANAGER: false,
   seleniumAddress: 'http://localhost:4444/wd/hub',
   suites: {
-    web: ['e2e/**/muting*.js', 'mobile/**/*.js'],
+    web: ['e2e/**/*.js', 'mobile/**/*.js'],
     mobile: [],
     // performance: 'performance/**/*.js'
   },

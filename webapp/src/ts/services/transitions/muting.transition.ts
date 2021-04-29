@@ -101,10 +101,7 @@ export class MutingTransition implements TransitionInterface {
    * @return {Boolean}
    */
   filter(docs) {
-    const relevantDocs = docs
-      .map(doc => this.isRelevantReport(doc) || this.isRelevantContact(doc))
-      .filter(result => !!result);
-    return !!relevantDocs.length;
+    return !!docs.filter(doc => this.isRelevantReport(doc) || this.isRelevantContact(doc)).length;
   }
 
   private async hydrateDocs(context) {
@@ -121,9 +118,9 @@ export class MutingTransition implements TransitionInterface {
     ];
     const hydratedDocs = await this.lineageModelGeneratorService.docs(docs);
 
-    for (const contact of hydratedDocs) {
-      context.hydratedDocs[contact._id] = contact;
-      let parent = contact.parent;
+    for (const doc of hydratedDocs) {
+      context.hydratedDocs[doc._id] = doc;
+      let parent = doc.parent;
       while (parent) {
         context.hydratedDocs[parent._id] = parent;
         parent = parent.parent;
@@ -133,7 +130,7 @@ export class MutingTransition implements TransitionInterface {
 
   private async isValid(report) {
     const errors = await this.validationService.validate(report, this.transitionConfig);
-    // todo add the errors on the doc?
+    // todo save the errors to the doc?
     return !errors || !errors.length;
   }
 
@@ -163,10 +160,8 @@ export class MutingTransition implements TransitionInterface {
   }
 
   private async updatedMuteState(contact, muted, report, context) {
-    let rootContactId;
-
     // when muting, mute the contact itself + all descendents
-    rootContactId = contact._id;
+    let rootContactId = contact._id;
     // when unmuting, find the topmost muted ancestor and unmute it and all its descendents
     if (!muted) {
       let parent = contact;
@@ -180,12 +175,12 @@ export class MutingTransition implements TransitionInterface {
     contactsToProcess.forEach(contactToProcess => {
       const knownContact = context.docs.find(doc => doc._id === contactToProcess._id);
       if (knownContact) {
-        this.processContact(knownContact, muted, report._id, context);
-        return;
+        contactToProcess = knownContact;
+      } else {
+        context.docs.push(contactToProcess);
       }
 
       this.processContact(contactToProcess, muted, report._id, context);
-      context.docs.push(contactToProcess);
     });
   }
 
@@ -211,8 +206,8 @@ export class MutingTransition implements TransitionInterface {
     const rootContact = await this.getRootContact(rootContactId, context);
 
     descendents.push(rootContact);
-    const foundContact = descendents.find(descendent => descendent._id === contact._id);
-    if (!foundContact) {
+    const isContactADescendent = descendents.find(descendent => descendent._id === contact._id);
+    if (!isContactADescendent) {
       descendents.push(contact);
     }
 
@@ -230,28 +225,27 @@ export class MutingTransition implements TransitionInterface {
     if (!context.contacts.length) {
       return;
     }
-    const contactsToProcess = [];
 
     context.contacts.forEach(contact => {
       const hydratedContact = context.hydratedDocs[contact._id];
-      const lineage = this.compileLineage(hydratedContact, context);
+      // we compile a lineage array for the contact from the context's hydratedDocs (which are updated on every
+      // contact process and are up to date)
+      const lineage = this.buildLineageFromHydratedDocs(hydratedContact, context);
+      // we use the lineage array param, which takes precedence over inlined lineage on the contact object
       const mutedParent = this.contactMutedService.getMutedParent(hydratedContact, lineage);
       if (mutedParent) {
-        const updatedMutedParent = context.hydratedDocs[mutedParent._id];
         // store reportId if the parent was last muted offline
         // if the parent was last muted online, we don't have access to this information
-        const reportId = this.lastUpdatedOffline(updatedMutedParent) ?
-          this.getLastMutingEvent(updatedMutedParent).report_id :
+        const reportId = this.lastUpdatedOffline(mutedParent) ?
+          this.getLastMutingEvent(mutedParent).report_id :
           undefined;
 
-        contactsToProcess.push({ contact, reportId });
+        this.processContact(contact, true, reportId, context);
       }
     });
-
-    contactsToProcess.forEach(({ contact, reportId }) => this.processContact(contact, true, reportId, context));
   }
 
-  private compileLineage(contact, context) {
+  private buildLineageFromHydratedDocs(contact, context) {
     let parent = contact.parent;
     const lineage = [];
     while (parent && parent._id) {
