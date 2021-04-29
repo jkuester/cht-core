@@ -166,14 +166,6 @@ describe('Muting', () => {
     await formsUtils.uploadForms();
   });
 
-  beforeEach(async () => {
-    await utils.saveDocs(contacts);
-  });
-
-  afterEach(async () => {
-    await utils.revertDb([DISTRICT._id, HEALTH_CENTER._id, /^form:/]);
-  });
-
   afterAll(async () => {
     await utils.startSentinel();
     await commonElements.goToLoginPageNative();
@@ -182,8 +174,13 @@ describe('Muting', () => {
     await commonElements.calmNative();
   });
 
+  afterEach(async () => {
+    await utils.revertSettings(true);
+  });
+
   describe('for an online user',  () => {
     beforeAll(async () => {
+      await utils.saveDocs(contacts);
       await utils.createUsers([onlineUser]);
       await commonElements.goToLoginPageNative();
       await loginPage.loginNative('online', password);
@@ -192,6 +189,7 @@ describe('Muting', () => {
 
     afterAll(async () => {
       await utils.deleteUsers([onlineUser]);
+      await utils.revertDb([DISTRICT._id, HEALTH_CENTER._id, /^form:/]);
     });
 
     it('should not process offline_muting when muting as an online user', async () => {
@@ -213,6 +211,7 @@ describe('Muting', () => {
 
   describe('for an offline user', () => {
     beforeAll(async () => {
+      await utils.saveDocs(contacts);
       await utils.createUsers([offlineUser]);
       await commonElements.goToLoginPageNative();
       await loginPage.loginNative(offlineUser.username, password);
@@ -224,6 +223,7 @@ describe('Muting', () => {
     });
 
     afterEach(async () => {
+      await unmuteContacts();
       await commonElements.syncNative();
     });
 
@@ -233,6 +233,15 @@ describe('Muting', () => {
       await utils.refreshToGetNewSettings();
     };
 
+    const unmuteContacts = async () => {
+      const docs = await utils.getDocs(contacts.map(c => c._id));
+      docs.forEach(doc => {
+        delete doc.muted;
+        delete doc.muting_history;
+      });
+      return utils.saveDocs(docs);
+    };
+
     it('should not process muting offline if not enabled', async () => {
       const settingsWithDisabled = _.cloneDeep(settings);
       settingsWithDisabled.muting.offline_muting = false;
@@ -240,15 +249,15 @@ describe('Muting', () => {
       await utils.stopSentinel();
       await updateSettings(settingsWithDisabled);
 
-      await muteClinic(clinic1, true);
+      await muteClinic(clinic2, true);
 
-      expectUnmutedNoHistory(await utils.getDoc(clinic1._id));
-      expectUnmutedNoHistory(await utils.getDoc(patient1._id));
+      expectUnmutedNoHistory(await utils.getDoc(clinic2._id));
+      expectUnmutedNoHistory(await utils.getDoc(patient2._id));
 
       await restartSentinel(true);
 
-      expectMutedNoHistory(await utils.getDoc(clinic1._id));
-      expectMutedNoHistory(await utils.getDoc(patient1._id));
+      expectMutedNoHistory(await utils.getDoc(clinic2._id));
+      expectMutedNoHistory(await utils.getDoc(patient2._id));
     });
 
     // for simplicity, offline means sentinel is stopped
