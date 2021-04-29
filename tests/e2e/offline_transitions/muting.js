@@ -225,6 +225,7 @@ describe('Muting', () => {
     afterEach(async () => {
       await unmuteContacts();
       await commonElements.syncNative();
+      await utils.refreshToGetNewSettings();
     });
 
     const updateSettings = async (settings) => {
