@@ -46,9 +46,9 @@ module.exports = {
     await helper.waitUntilReadyNative(rows.last());
     await module.exports.clickRowByName(text);
     await helper.waitUntilReadyNative(contactName);
-    expect(await contactName.getText()).toBe(text);
     // wait until contact summary is loaded
     await helper.waitUntilReadyNative(element(by.css('.body.meta .row.flex.grid')));
+    expect(await contactName.getText()).toBe(text);
   },
 
   addNewDistrict: async (districtName) => {
