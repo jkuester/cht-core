@@ -236,11 +236,15 @@ describe('Muting', () => {
 
     const unmuteContacts = async () => {
       const docs = await utils.getDocs(contacts.map(c => c._id));
-      docs.forEach(doc => {
-        delete doc.muted;
-        delete doc.muting_history;
+
+      const docsToUpdate = docs.filter(doc => {
+        if (doc.muted || doc.muting_history) {
+          delete doc.muted;
+          delete doc.muting_history;
+          return doc;
+        }
       });
-      return utils.saveDocs(docs);
+      return utils.saveDocs(docsToUpdate);
     };
 
     it('should not process muting offline if not enabled', async () => {
