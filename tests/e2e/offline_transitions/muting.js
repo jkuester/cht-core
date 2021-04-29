@@ -134,7 +134,7 @@ describe('Muting', () => {
 
     await formsUtils.openForm(form);
     await formsUtils.submit();
-    sync && await commonElements.syncNative();
+    sync && await commonElements.syncNative() && await commonElements.syncNative();
   };
 
   const muteClinic = (contact, sync = false) => {
