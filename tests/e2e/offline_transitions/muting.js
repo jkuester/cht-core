@@ -109,18 +109,16 @@ describe('Muting', () => {
     },
   };
 
-  const getLastSubmittedReport = async () => {
-    const query = await utils.db.query(
-      'medic-client/reports_by_date',
-      { descending: true, limit: 1, include_docs: true }
-    );
-
-    if (!query.rows.length) {
-      await commonElements.syncNative();
-      return getLastSubmittedReport();
-    }
-
-    return query.rows[0].doc;
+  const getLastSubmittedReport = () => {
+    return browser.executeAsyncScript(() => {
+      const callback = arguments[arguments.length - 1];
+      // eslint-disable-next-line no-undef
+      const db = window.CHTCore.DB.get();
+      return db
+        .query('medic-client/reports_by_date', { descending: true, limit: 1, include_docs: true })
+        .then(result => callback(result.rows[0].doc))
+        .catch(err => callback(err));
+    });
   };
 
   const submitMutingForm = async (name, form, sync = false) =>  {
@@ -134,7 +132,7 @@ describe('Muting', () => {
 
     await formsUtils.openForm(form);
     await formsUtils.submit();
-    sync && await commonElements.syncNative() && await commonElements.syncNative();
+    sync && await commonElements.syncNative();
   };
 
   const muteClinic = (contact, sync = false) => {
@@ -181,10 +179,6 @@ describe('Muting', () => {
     await commonElements.calmNative();
   });
 
-  afterEach(async () => {
-    await utils.revertSettings(true);
-  });
-
   describe('for an online user',  () => {
     beforeAll(async () => {
       await utils.saveDocs(contacts);
@@ -196,6 +190,9 @@ describe('Muting', () => {
 
     afterAll(async () => {
       await utils.deleteUsers([onlineUser]);
+    });
+
+    afterEach(async () => {
       await utils.revertDb([DISTRICT._id, HEALTH_CENTER._id, /^form:/]);
     });
 
@@ -230,6 +227,7 @@ describe('Muting', () => {
     });
 
     afterEach(async () => {
+      await utils.revertSettings(true);
       await unmuteContacts();
       await commonElements.syncNative();
       await utils.refreshToGetNewSettings();
