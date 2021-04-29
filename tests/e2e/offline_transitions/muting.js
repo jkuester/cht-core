@@ -113,6 +113,12 @@ describe('Muting', () => {
       'medic-client/reports_by_date',
       { descending: true, limit: 1, include_docs: true }
     );
+
+    if (!query.rows.length) {
+      await commonElements.syncNative();
+      return getLastSubmittedReport();
+    }
+
     return query.rows[0].doc;
   };
 
@@ -217,7 +223,7 @@ describe('Muting', () => {
       await utils.deleteUsers([offlineUser]);
     });
 
-    beforeEach(async () => {
+    afterEach(async () => {
       await commonElements.syncNative();
     });
 
