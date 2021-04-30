@@ -123,6 +123,7 @@ describe('Muting', () => {
 
   const submitMutingForm = async (name, form, sync = false) =>  {
     await commonElements.goToPeople();
+    await contactsObjects.contactLoaded();
     try {
       await contactsObjects.selectLHSRowByText(name);
     } catch(err) {
