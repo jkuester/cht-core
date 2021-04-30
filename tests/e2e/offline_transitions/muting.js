@@ -121,15 +121,16 @@ describe('Muting', () => {
     });
   };
 
-  const submitMutingForm = async (name, form, sync = false) =>  {
-    await commonElements.goToPeople();
+  const submitMutingForm = async (contact, form, sync = false) =>  {
+    /*await commonElements.goToPeople();
     await contactsObjects.contactLoaded();
     try {
       await contactsObjects.selectLHSRowByText(name);
     } catch(err) {
       console.warn('Failed loading contact', err);
       await contactsObjects.selectLHSRowByText(name);
-    }
+    }*/
+    await contactsObjects.loadContact(contact._id);
 
     await formsUtils.openForm(form);
     await formsUtils.submit();
@@ -137,19 +138,19 @@ describe('Muting', () => {
   };
 
   const muteClinic = (contact, sync = false) => {
-    return submitMutingForm(contact.name, 'mute_clinic', sync);
+    return submitMutingForm(contact, 'mute_clinic', sync);
   };
 
   const unmuteClinic = (contact, sync = false) => {
-    return submitMutingForm(contact.name, 'unmute_clinic', sync);
+    return submitMutingForm(contact, 'unmute_clinic', sync);
   };
 
   const mutePerson = (contact, sync = false) => {
-    return submitMutingForm(contact.name, 'mute_person', sync);
+    return submitMutingForm(contact, 'mute_person', sync);
   };
 
   const unmutePerson = (contact, sync = false) => {
-    return submitMutingForm(contact.name, 'unmute_person', sync);
+    return submitMutingForm(contact, 'unmute_person', sync);
   };
 
   const restartSentinel = async (sync = false) => {

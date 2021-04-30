@@ -1,5 +1,7 @@
 const helper = require('../../helper');
 const genericForm = require('../forms/generic-form.po');
+const utils = require('../../utils');
+
 const searchBox = element(by.css('#freetext'));
 const searchButton = element(by.css('#search'));
 const refreshButton = element(by.css('.fa fa-undo'));
@@ -51,6 +53,11 @@ module.exports = {
     // wait until contact summary is loaded
     await module.exports.contactLoaded();
     expect(await contactName.getText()).toBe(text);
+  },
+
+  loadContact: async (uuid) => {
+    await browser.get(utils.getBaseUrl() + 'contacts/' + uuid);
+    await module.exports.contactLoaded();
   },
 
   addNewDistrict: async (districtName) => {
