@@ -29,7 +29,7 @@ describe('Muting', () => {
     _id: 'contact1',
     name: 'contact1',
     type: 'person',
-    parent: { _id: DISTRICT._id },
+    parent: { _id: HEALTH_CENTER._id, parent: { _id: DISTRICT._id } },
   };
   const clinic1 = {
     _id: 'clinic1',
@@ -229,7 +229,6 @@ describe('Muting', () => {
     afterEach(async () => {
       await utils.revertSettings(true);
       await unmuteContacts();
-      await commonElements.syncNative();
       await utils.refreshToGetNewSettings();
     });
 
@@ -239,7 +238,32 @@ describe('Muting', () => {
       await utils.refreshToGetNewSettings();
     };
 
-    const unmuteContacts = async () => {
+    const unmuteContacts = () => {
+      const ids = contacts.map(c => c._id);
+      return browser.executeAsyncScript((ids) => {
+        const callback = arguments[arguments.length - 1];
+        // eslint-disable-next-line no-undef
+        const db = window.CHTCore.DB.get();
+        return db
+          .allDocs({ keys: ids, include_docs: true })
+          .then(result => {
+            const docs = [];
+            result.rows.forEach(row => {
+              if (!row.doc) {
+                return;
+              }
+              delete row.doc.muted;
+              delete row.doc.muting_history;
+              docs.push(row.doc);
+            });
+            return db.bulkDocs(docs);
+          })
+          .then(callback)
+          .catch(callback);
+      }, ids);
+    };
+
+    /*const unmuteContacts = async () => {
       const docs = await utils.getDocs(contacts.map(c => c._id));
 
       const docsToUpdate = docs.filter(doc => {
@@ -250,7 +274,7 @@ describe('Muting', () => {
         }
       });
       return utils.saveDocs(docsToUpdate);
-    };
+    };*/
 
     it('should not process muting offline if not enabled', async () => {
       const settingsWithDisabled = _.cloneDeep(settings);
@@ -464,6 +488,7 @@ describe('Muting', () => {
 
       expectUnmutedNoHistory(await utils.getDoc(clinic2._id));
       expectUnmutedNoHistory(await utils.getDoc(patient2._id));
+      expectUnmutedNoHistory(await utils.getDoc(contact1._id));
 
       const offlineMutingDate = updatedPatient1.muted;
 
