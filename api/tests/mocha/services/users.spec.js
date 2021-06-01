@@ -1294,6 +1294,40 @@ describe('Users service', () => {
       });
     });
 
+    it('succeeds if only language is defined by online user', () => {
+      const data = {
+        language: 'es'
+      };
+      service.__set__('validateUser', sinon.stub().resolves({}));
+      service.__set__('validateUserSettings', sinon.stub().resolves({}));
+      sinon.stub(db.medic, 'put').resolves({});
+      sinon.stub(db.users, 'put').resolves({});
+      return service.updateUser('paul', data, true).then(() => {
+        chai.expect(db.medic.put.callCount).to.equal(1);
+        chai.expect(db.users.put.callCount).to.equal(1);
+      });
+    });
+
+    it('succeeds if only language is defined by offline user', () => {
+      const data = {
+        language: 'es'
+      };
+      service.__set__('validateUser', sinon.stub().resolves({}));
+      service.__set__('validateUserSettings', sinon.stub().resolves({}));
+      sinon.stub(db.medic, 'put').resolves({});
+      sinon.stub(db.users, 'put').resolves({});
+      return service.updateUser('paul', data, false).then(() => {
+        chai.expect(db.medic.put.callCount).to.equal(1);
+        chai.expect(db.users.put.callCount).to.equal(1);
+      });
+    });
+
+    // it('errors on unknown property', () => {
+    //   return service.updateUser('paul', {foo: 'bar'}, true).catch(err => {
+    //     chai.expect(err.code).to.equal(400);
+    //   });
+    // });
+
   });
 
   describe('validateNewUsername', () => {
