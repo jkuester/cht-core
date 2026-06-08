@@ -46,6 +46,8 @@ module.exports = defineConfig([
     'api/src/enketo-transformer/**/*',
     'api/src/public/login/lib-bowser.js',
     'build/**/*',
+    'config/farm/ui-extensions/flock-overview.js',
+    'config/farm/ui-extensions/flock-overview/**/*',
     'jsdocs/**/*',
     'shared-libs/cht-datasource/dist/**/*',
     'shared-libs/cht-datasource/docs/**/*',

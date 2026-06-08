@@ -1,1 +1,85 @@
-{}
+{
+  "contact_types": [
+    {
+      "id": "farm",
+      "name_key": "Farm",
+      "group_key": "Farms",
+      "create_key": "New farm",
+      "edit_key": "Edit farm",
+      "icon": "medic-district-hospital"
+    },
+    {
+      "id": "flock",
+      "name_key": "Flock",
+      "group_key": "Flocks",
+      "create_key": "New flock",
+      "edit_key": "Edit flock",
+      "parents": [
+        "farm"
+      ],
+      "icon": "medic-health-center"
+    },
+    {
+      "id": "farmer",
+      "name_key": "Farmer",
+      "group_key": "Farmers",
+      "create_key": "New farmer",
+      "edit_key": "Edit farmer",
+      "primary_contact_key": "Farmer",
+      "parents": [
+        "farm"
+      ],
+      "icon": "medic-person",
+      "create_form": "form:contact:person:create",
+      "edit_form": "form:contact:person:edit",
+      "person": true
+    },
+    {
+      "id": "chicken",
+      "name_key": "Chicken",
+      "group_key": "Chickens",
+      "create_key": "New Chicken",
+      "edit_key": "Edit Chicken",
+      "parents": [
+        "flock"
+      ],
+      "icon": "medic-person",
+      "person": true
+    }
+  ],
+  "roles": {
+    "chicken_farmer": {
+      "name": "Chicken Farmer",
+      "offline": true
+    }
+  },
+  "permissions": {
+    "can_create_records": [
+      "chicken_farmer"
+    ],
+    "can_edit": [
+      "chicken_farmer"
+    ],
+    "can_view_contacts": [
+      "chicken_farmer"
+    ],
+    "can_view_contacts_tab": [
+      "chicken_farmer"
+    ],
+    "can_view_reports": [
+      "chicken_farmer"
+    ],
+    "can_view_reports_tab": [
+      "chicken_farmer"
+    ],
+    "death_reporting": {
+      "mark_deceased_forms": [
+        "death_report"
+      ],
+      "date_field": "fields.death_details.date_of_death",
+      "undo_deceased_forms": [
+        "undo_death_report"
+      ]
+    }
+  }
+}
