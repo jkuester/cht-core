@@ -1,0 +1,29 @@
+{
+  "extension_type": "header_tab",
+  "title": "Overview",
+  "icon": "fa-line-chart",
+  "weight": 0,
+  "accent_color": "#E8A33D",
+  "config": {
+    "chickenContactType": "chicken",
+    "weightForm": "weight_check",
+    "healthForm": "health_check",
+    "weightField": "weight_g",
+    "conditionField": "condition",
+    "noteField": "note",
+    "marketWeightG": 2700,
+    "underweightThreshold": 0.85,
+    "staleWeighInDays": 4,
+    "targetCurve": [
+      { "day": 0, "g": 42 },
+      { "day": 7, "g": 180 },
+      { "day": 14, "g": 460 },
+      { "day": 21, "g": 930 },
+      { "day": 28, "g": 1550 },
+      { "day": 35, "g": 2200 },
+      { "day": 42, "g": 2900 },
+      { "day": 49, "g": 3500 }
+    ],
+    "accentColor": "#E8A33D"
+  }
+}

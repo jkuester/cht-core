@@ -1,0 +1,14 @@
+{
+  "name": "flock-overview-extension",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CHT UI Extension: Daily Flock Briefing web component (Chart.js + on-device LLM via wllama).",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "chart.js": "^4.5.1",
+    "esbuild": "^0.28.0"
+  }
+}
