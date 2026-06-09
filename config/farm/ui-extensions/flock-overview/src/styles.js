@@ -62,6 +62,12 @@ export const styles = (accent) => `<style>
   .bird:hover { transform:scale(1.12); }
   .bird.sel { box-shadow:0 0 0 2px #fff,0 0 0 4px var(--c); transform:scale(1.12); }
   .bird-detail { font-size:.82rem; color:var(--muted); margin:10px 0 2px; min-height:1.2em; }
+  .bird-info { font-size:.82rem; color:var(--muted); }
+  .bird-status-label { display:inline-flex; align-items:center; gap:8px; margin-top:8px; font-size:.8rem; color:var(--muted); }
+  .bird-status { font:inherit; font-size:.82rem; padding:4px 8px; border:1px solid var(--line); border-radius:8px;
+    background:#fff; color:var(--ink); cursor:pointer; }
+  .bird-status:disabled { opacity:.6; cursor:default; }
+  .bird-status-msg { font-size:.74rem; color:var(--muted); }
   .legend { display:flex; gap:14px; flex-wrap:wrap; font-size:.74rem; color:var(--muted); margin-top:10px; }
   .legend .sw { display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
 

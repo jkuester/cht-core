@@ -55,6 +55,7 @@ export function computeMetrics(birds, cfg) {
     const latestHealth = reports
       .filter((r) => r.form === cfg.healthForm && r.fields)
       .sort((a, b) => b.reported_date - a.reported_date)[0];
+    const condition = latestHealth ? latestHealth.fields[cfg.conditionField] : null;
 
     const latestWeight = weights.length ? weights[weights.length - 1] : null;
     const lastWeighDaysAgo = latestWeight ? daysBetween(today, latestWeight.date) : null;
@@ -69,7 +70,7 @@ export function computeMetrics(birds, cfg) {
       latestWeightG: latestWeight ? latestWeight.g : null,
       lastWeighDaysAgo,
       pctOfTarget: latestWeight && target ? latestWeight.g / target : null,
-      condition: latestHealth ? latestHealth.fields[cfg.conditionField] : null,
+      condition,
       note: latestHealth ? latestHealth.fields[cfg.noteField] : null,
     };
   });

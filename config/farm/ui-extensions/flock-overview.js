@@ -165,6 +165,7 @@ var FlockOverviewBundle = (() => {
         ageAt: Math.max(0, daysBetween(r.reported_date, hatchMs))
       })).sort((a, b) => a.date - b.date);
       const latestHealth = reports.filter((r) => r.form === cfg.healthForm && r.fields).sort((a, b) => b.reported_date - a.reported_date)[0];
+      const condition = latestHealth ? latestHealth.fields[cfg.conditionField] : null;
       const latestWeight = weights.length ? weights[weights.length - 1] : null;
       const lastWeighDaysAgo = latestWeight ? daysBetween(today, latestWeight.date) : null;
       const target = targetWeightAt(cfg.targetCurve, ageDays);
@@ -177,7 +178,7 @@ var FlockOverviewBundle = (() => {
         latestWeightG: latestWeight ? latestWeight.g : null,
         lastWeighDaysAgo,
         pctOfTarget: latestWeight && target ? latestWeight.g / target : null,
-        condition: latestHealth ? latestHealth.fields[cfg.conditionField] : null,
+        condition,
         note: latestHealth ? latestHealth.fields[cfg.noteField] : null
       };
     });
@@ -12787,6 +12788,12 @@ var FlockOverviewBundle = (() => {
   .bird:hover { transform:scale(1.12); }
   .bird.sel { box-shadow:0 0 0 2px #fff,0 0 0 4px var(--c); transform:scale(1.12); }
   .bird-detail { font-size:.82rem; color:var(--muted); margin:10px 0 2px; min-height:1.2em; }
+  .bird-info { font-size:.82rem; color:var(--muted); }
+  .bird-status-label { display:inline-flex; align-items:center; gap:8px; margin-top:8px; font-size:.8rem; color:var(--muted); }
+  .bird-status { font:inherit; font-size:.82rem; padding:4px 8px; border:1px solid var(--line); border-radius:8px;
+    background:#fff; color:var(--ink); cursor:pointer; }
+  .bird-status:disabled { opacity:.6; cursor:default; }
+  .bird-status-msg { font-size:.74rem; color:var(--muted); }
   .legend { display:flex; gap:14px; flex-wrap:wrap; font-size:.74rem; color:var(--muted); margin-top:10px; }
   .legend .sw { display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
 
@@ -12826,6 +12833,7 @@ var FlockOverviewBundle = (() => {
       super();
       this.attachShadow({ mode: "open" });
       this.charts = [];
+      this.selectedId = null;
     }
     async connectedCallback() {
       const userCfg = this.inputs?.config || {};
@@ -12836,20 +12844,34 @@ var FlockOverviewBundle = (() => {
       };
       this.renderLoading();
       try {
-        const birds = await loadFlock(this.cht, this.cfg);
-        this.metrics = computeMetrics(birds, this.cfg);
-        this.briefing = buildBriefing(this.metrics.facts);
-        this.render();
-        this.initCharts();
-        this.bindHealthGrid();
+        this.birds = await loadFlock(this.cht, this.cfg);
+        this.recompute();
+        this.draw();
       } catch (err) {
         console.error("flock-overview: failed to load flock", err);
         this.renderError(err);
       }
     }
     disconnectedCallback() {
+      this.destroyCharts();
+    }
+    destroyCharts() {
       this.charts.forEach((c) => c?.destroy());
       this.charts = [];
+    }
+    recompute() {
+      this.metrics = computeMetrics(this.birds, this.cfg);
+      this.briefing = buildBriefing(this.metrics.facts);
+    }
+    /** (Re)render everything and restore the selected bird, if any. */
+    draw() {
+      this.destroyCharts();
+      this.render();
+      this.initCharts();
+      this.bindHealthGrid();
+      if (this.selectedId && this.metrics.rows.some((r) => r.id === this.selectedId)) {
+        this.selectBird(this.selectedId);
+      }
     }
     briefingItemsHtml() {
       const items = this.briefing.map((it) => `
@@ -12972,21 +12994,77 @@ var FlockOverviewBundle = (() => {
       return `<section class="card"><h2>Needs attention</h2><ul class="att-list">${rows}</ul></section>`;
     }
     bindHealthGrid() {
-      const detail = this.shadowRoot.getElementById("bird-detail");
       this.shadowRoot.querySelectorAll(".bird").forEach((el) => {
-        el.addEventListener("click", () => {
-          this.shadowRoot.querySelectorAll(".bird.sel").forEach((b2) => b2.classList.remove("sel"));
-          el.classList.add("sel");
-          const b = this.metrics.rows.find((r) => r.id === el.dataset.id);
-          if (!b) {
-            return;
-          }
-          const status = STATUS[b.status === "active" ? b.condition || "healthy" : b.status] || STATUS.healthy;
-          const tgt = has(b.pctOfTarget) ? ` \xB7 ${pct(b.pctOfTarget)} of target` : "";
-          const note = b.note ? ` \xB7 \u201C${esc(b.note)}\u201D` : "";
-          detail.innerHTML = `<strong>${esc(b.name)}</strong> \xB7 day ${b.ageDays} \xB7 <span style="color:${status.color}">${status.label}</span> \xB7 ${b.latestWeightG ? `${kg(b.latestWeightG)} kg${tgt}` : "no weight yet"}${note}`;
-        });
+        el.addEventListener("click", () => this.selectBird(el.dataset.id));
       });
+    }
+    selectBird(id) {
+      this.selectedId = id;
+      this.shadowRoot.querySelectorAll(".bird").forEach((c) => c.classList.toggle("sel", c.dataset.id === id));
+      const b = this.metrics.rows.find((r) => r.id === id);
+      const detail = this.shadowRoot.getElementById("bird-detail");
+      if (!b || !detail) {
+        return;
+      }
+      detail.innerHTML = this.birdDetailHtml(b);
+      const select = detail.querySelector(".bird-status");
+      if (select) {
+        select.addEventListener("change", () => this.updateBirdStatus(id, select.value));
+      }
+    }
+    birdDetailHtml(b) {
+      const status = STATUS[b.status === "active" ? b.condition || "healthy" : b.status] || STATUS.healthy;
+      const tgt = has(b.pctOfTarget) ? ` \xB7 ${pct(b.pctOfTarget)} of target` : "";
+      const note = b.note ? ` \xB7 \u201C${esc(b.note)}\u201D` : "";
+      const info = `<div class="bird-info"><strong>${esc(b.name)}</strong> \xB7 day ${b.ageDays} \xB7 <span style="color:${status.color}">${status.label}</span> \xB7 ${b.latestWeightG ? `${kg(b.latestWeightG)} kg${tgt}` : "no weight yet"}${note}</div>`;
+      if (b.status !== "active") {
+        return info;
+      }
+      const current = b.condition || "healthy";
+      const opts = [["healthy", "Healthy"], ["watch", "Watch"], ["sick", "Sick"]].map(([v, l]) => `<option value="${v}"${v === current ? " selected" : ""}>${l}</option>`).join("");
+      return `${info}
+      <label class="bird-status-label">Set status
+        <select class="bird-status">${opts}</select>
+        <span class="bird-status-msg" aria-live="polite"></span>
+      </label>`;
+    }
+    async updateBirdStatus(id, value) {
+      const select = this.shadowRoot.querySelector(".bird-status");
+      const msg = this.shadowRoot.querySelector(".bird-status-msg");
+      if (select) {
+        select.disabled = true;
+      }
+      if (msg) {
+        msg.textContent = "Saving\u2026";
+      }
+      try {
+        const entry = this.birds.find((bd) => bd.contact._id === id);
+        const patientId = entry?.contact?.patient_id || id;
+        const reportedDate = Date.now();
+        await this.cht.v1.report.create({
+          form: this.cfg.healthForm,
+          contact: id,
+          reported_date: reportedDate,
+          fields: { patient_id: patientId, patient_uuid: id, [this.cfg.conditionField]: value }
+        });
+        if (entry) {
+          entry.reports.push({
+            form: this.cfg.healthForm,
+            reported_date: reportedDate,
+            fields: { [this.cfg.conditionField]: value }
+          });
+        }
+        this.recompute();
+        this.draw();
+      } catch (err) {
+        console.error("flock-overview: failed to record health check", err);
+        if (select) {
+          select.disabled = false;
+        }
+        if (msg) {
+          msg.textContent = "Save failed";
+        }
+      }
     }
     // --- states ------------------------------------------------------------
     renderLoading() {
