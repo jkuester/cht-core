@@ -141,7 +141,7 @@ for (const [tag, deathDay, lastWeighDay, condition] of DECEASED) {
     name: `Band ${tag}`,
     patient_id: id,
     hatch_date: HATCH_DATE,
-    status: 'deceased',
+    date_of_death: new Date(at(deathDay)).toISOString().slice(0, 10),
     parent: chickenParent,
     reported_date: at(0),
   });

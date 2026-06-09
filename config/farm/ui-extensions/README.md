@@ -27,7 +27,8 @@ curve is fixed in `config.targetCurve`). The authoritative field-by-field spec
 lives in [`../README.md`](../README.md); in brief:
 
 - **chicken contact** — `name`, `patient_id`, `hatch_date`, `status`
-  (`active` \| `processed` \| `deceased`); queried by `contact_type: chicken`.
+  (`active` \| `processed`), and `date_of_death` (present ⇒ deceased); queried by
+  `contact_type: chicken`.
 - **`weight_check` report** — `fields.weight_g` (+ `reported_date`).
 - **`health_check` report** — `fields.condition` (`healthy` \| `watch` \|
   `sick`) and optional `fields.note`.

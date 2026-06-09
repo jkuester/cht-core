@@ -158,7 +158,7 @@ var FlockOverviewBundle = (() => {
     const rows = birds.map(({ contact, reports }) => {
       const hatchMs = contact.hatch_date ? new Date(contact.hatch_date).getTime() : today;
       const ageDays = Math.max(0, daysBetween(today, hatchMs));
-      const status = contact.status || "active";
+      const status = has(contact.date_of_death) ? "deceased" : contact.status === "processed" ? "processed" : "active";
       const weights = reports.filter((r) => r.form === cfg.weightForm && r.fields && has(r.fields[cfg.weightField])).map((r) => ({
         g: Number(r.fields[cfg.weightField]),
         date: r.reported_date,

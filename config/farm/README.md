@@ -22,7 +22,8 @@ is fixed in `config.targetCurve`. Fields read off each contact doc:
 | `name`       | string                                   | recommended     | falls back to `patient_id`, then `_id`     | Display label on the health grid, attention list, bird detail                 |
 | `patient_id` | string                                   | recommended     | falls back to `_id`                        | **Freetext key used to find this bird's reports** (see note below)            |
 | `hatch_date` | ISO date string (`"2026-05-11"`)         | recommended     | today (→ age 0)                            | Age in days → drives target-weight-for-age, growth curve, flock "Day N"       |
-| `status`     | `"active"` \| `"processed"` \| `"deceased"` | recommended  | `"active"`                                 | Alive count, mortality %, processed count; health-grid color. Only `active` birds count toward weight/attention metrics |
+| `date_of_death` | ISO date string (`"2026-05-29"`)      | when deceased   | absent (→ alive)                           | **Presence ⇒ the bird is deceased** (standard CHT field). Drives mortality %; deceased birds are excluded from weight/attention metrics |
+| `status`     | `"active"` \| `"processed"`              | optional        | `"active"`                                 | Distinguishes active vs processed (sent to slaughter); health-grid color. *Deceased is determined by `date_of_death`, not this field.* |
 
 > `contact_type` itself isn't *read* from the doc — it's the query filter. The
 > contacts can be modeled as person-type custom contacts under a flock/farm
@@ -55,7 +56,8 @@ are ignored. Multiple per bird over time build the growth curve.
 
 `condition` and `note` are configurable via `config.conditionField` /
 `config.noteField`. Only the most recent `health_check` per bird matters; older
-ones are ignored. A death/cull just flips the contact's `status`.
+ones are ignored. A death/cull is recorded by setting the contact's
+`date_of_death`.
 
 ## How reports are linked to a bird
 

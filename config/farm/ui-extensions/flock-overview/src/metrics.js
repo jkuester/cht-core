@@ -37,7 +37,11 @@ export function computeMetrics(birds, cfg) {
   const rows = birds.map(({ contact, reports }) => {
     const hatchMs = contact.hatch_date ? new Date(contact.hatch_date).getTime() : today;
     const ageDays = Math.max(0, daysBetween(today, hatchMs));
-    const status = contact.status || 'active';
+    // Deceased is driven by the standard CHT date_of_death field; status still
+    // distinguishes active vs processed birds.
+    const status = has(contact.date_of_death)
+      ? 'deceased'
+      : (contact.status === 'processed' ? 'processed' : 'active');
 
     const weights = reports
       .filter((r) => r.form === cfg.weightForm && r.fields && has(r.fields[cfg.weightField]))
