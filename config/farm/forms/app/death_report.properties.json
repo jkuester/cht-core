@@ -1,0 +1,8 @@
+{
+    "icon": "icon-death-general",
+    "title": "Death report",
+    "context": {
+        "person": true,
+        "place": false
+    }
+}

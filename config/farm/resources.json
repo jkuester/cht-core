@@ -1,3 +1,8 @@
 {
-  "icon-barn": "barn.png"
+  "icon-barn": "barn.png",
+  "icon-barn-color": "barn-color.png",
+  "icon-chicken-color": "chicken-color.png",
+  "icon-death-general": "icon-death-general.png",
+  "icon-feather-color": "feather-color.png",
+  "medic-person": "medic-person.svg"
 }

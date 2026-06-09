@@ -6,7 +6,7 @@
       "group_key": "Farms",
       "create_key": "New farm",
       "edit_key": "Edit farm",
-      "icon": "medic-district-hospital"
+      "icon": "icon-barn-color"
     },
     {
       "id": "flock",
@@ -17,7 +17,7 @@
       "parents": [
         "farm"
       ],
-      "icon": "medic-health-center"
+      "icon": "icon-feather-color"
     },
     {
       "id": "farmer",
@@ -43,7 +43,7 @@
       "parents": [
         "flock"
       ],
-      "icon": "medic-person",
+      "icon": "icon-chicken-color",
       "person": true
     }
   ],
@@ -87,5 +87,8 @@
       "resource_icon": "icon-barn",
       "weight": "0.5"
     }
+  },
+  "transitions": {
+    "death_reporting": true
   }
 }
