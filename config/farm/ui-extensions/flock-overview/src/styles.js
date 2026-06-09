@@ -4,7 +4,7 @@ export const styles = (accent) => `<style>
     display:block; background:var(--bg); color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
   * { box-sizing:border-box; }
-  .wrap { max-width:760px; margin:0 auto; padding:16px 14px 40px; }
+  .wrap { max-width:760px; margin:0 auto; padding:16px 14px 80px; }
   h1 { font-size:1.9rem; margin:.1rem 0 0; letter-spacing:-.02em; }
   h2 { font-size:.95rem; margin:0 0 .7rem; letter-spacing:.01em; }
   .muted { color:var(--muted); }
@@ -67,13 +67,17 @@ export const styles = (accent) => `<style>
 
   .hist-meta { font-size:.8rem; color:var(--muted); margin-top:8px; }
   .att-list { list-style:none; margin:0; padding:0; }
-  .att-row { display:flex; align-items:center; gap:9px; padding:9px 2px; border-bottom:1px solid var(--line); font-size:.86rem; }
-  .att-row:last-child { border-bottom:none; }
+  .att-item { border-bottom:1px solid var(--line); }
+  .att-item:last-child { border-bottom:none; }
+  .att-row { display:flex; align-items:center; gap:9px; padding:9px 6px; margin:0 -6px; font-size:.86rem;
+    text-decoration:none; color:inherit; cursor:pointer; border-radius:9px; transition:background .12s; }
+  .att-row:hover, .att-row:focus-visible { background:#faf7f1; outline:none; }
   .att-dot { width:9px; height:9px; border-radius:50%; flex:none; }
   .att-name { font-weight:650; }
   .att-reasons { flex:1; display:flex; gap:6px; flex-wrap:wrap; }
   .att-reasons em { font-style:normal; font-size:.72rem; background:#f1f2ee; color:var(--muted); padding:2px 7px; border-radius:999px; }
   .att-weight { color:var(--muted); font-variant-numeric:tabular-nums; }
+  .att-go { color:var(--muted); font-size:1.1rem; line-height:1; margin-left:2px; }
   .all-clear { color:var(--good); margin:0; font-size:.9rem; }
 
   .empty, .error { text-align:center; padding:34px 16px; }

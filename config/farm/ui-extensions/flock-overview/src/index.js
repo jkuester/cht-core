@@ -152,11 +152,14 @@ export default class FlockOverview extends HTMLElement {
     }
     const dot = (b) => (b.condition === 'sick' ? '#E2553B' : (b.underweight || b.condition === 'watch') ? '#E8A33D' : '#9AA0A6');
     const rows = this.metrics.attention.map((b) => `
-      <li class="att-row">
-        <span class="att-dot" style="background:${dot(b)}"></span>
-        <span class="att-name">${esc(b.name)}</span>
-        <span class="att-reasons">${b.reasons.map((r) => `<em>${esc(r)}</em>`).join('')}</span>
-        <span class="att-weight">${b.latestWeightG ? `${kg(b.latestWeightG)} kg` : '—'}</span>
+      <li class="att-item">
+        <a class="att-row" href="/#/contacts/${esc(b.id)}" title="Open ${esc(b.name)} in Contacts">
+          <span class="att-dot" style="background:${dot(b)}"></span>
+          <span class="att-name">${esc(b.name)}</span>
+          <span class="att-reasons">${b.reasons.map((r) => `<em>${esc(r)}</em>`).join('')}</span>
+          <span class="att-weight">${b.latestWeightG ? `${kg(b.latestWeightG)} kg` : '—'}</span>
+          <span class="att-go" aria-hidden="true">›</span>
+        </a>
       </li>`).join('');
     return `<section class="card"><h2>Needs attention</h2><ul class="att-list">${rows}</ul></section>`;
   }
