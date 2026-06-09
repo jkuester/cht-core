@@ -12789,6 +12789,15 @@ var FlockOverviewBundle = (() => {
   .bird.sel { box-shadow:0 0 0 2px #fff,0 0 0 4px var(--c); transform:scale(1.12); }
   .bird-detail { font-size:.82rem; color:var(--muted); margin:10px 0 2px; min-height:1.2em; }
   .bird-info { font-size:.82rem; color:var(--muted); }
+  .name-edit { font:inherit; font-weight:700; color:var(--ink); background:none; border:none; padding:0;
+    cursor:pointer; border-bottom:1px dashed var(--muted); }
+  .name-edit:hover, .name-edit:focus-visible { color:var(--accent); border-bottom-color:var(--accent); outline:none; }
+  .name-edit-box { display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .name-input { font:inherit; font-size:.82rem; padding:3px 7px; border:1px solid var(--line); border-radius:6px;
+    background:#fff; color:var(--ink); min-width:120px; }
+  .name-save { font:inherit; font-size:.72rem; padding:3px 9px; border:1px solid var(--accent);
+    border-radius:6px; background:var(--accent); color:#fff; cursor:pointer; }
+  .name-msg { font-size:.72rem; color:var(--muted); }
   .bird-status-label { display:inline-flex; align-items:center; gap:8px; margin-top:8px; font-size:.8rem; color:var(--muted); }
   .bird-status { font:inherit; font-size:.82rem; padding:4px 8px; border:1px solid var(--line); border-radius:8px;
     background:#fff; color:var(--ink); cursor:pointer; }
@@ -13000,8 +13009,12 @@ var FlockOverviewBundle = (() => {
     }
     selectBird(id) {
       this.selectedId = id;
+      this.editingName = false;
       this.shadowRoot.querySelectorAll(".bird").forEach((c) => c.classList.toggle("sel", c.dataset.id === id));
-      const b = this.metrics.rows.find((r) => r.id === id);
+      this.renderDetail();
+    }
+    renderDetail() {
+      const b = this.metrics.rows.find((r) => r.id === this.selectedId);
       const detail = this.shadowRoot.getElementById("bird-detail");
       if (!b || !detail) {
         return;
@@ -13009,14 +13022,37 @@ var FlockOverviewBundle = (() => {
       detail.innerHTML = this.birdDetailHtml(b);
       const select = detail.querySelector(".bird-status");
       if (select) {
-        select.addEventListener("change", () => this.updateBirdStatus(id, select.value));
+        select.addEventListener("change", () => this.updateBirdStatus(b.id, select.value));
+      }
+      if (this.editingName) {
+        const input = detail.querySelector(".name-input");
+        const commit = () => this.saveName(b.id, input.value);
+        input.focus();
+        input.select();
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          }
+        });
+        detail.querySelector(".name-save").addEventListener("click", commit);
+      } else {
+        detail.querySelector(".name-edit").addEventListener("click", () => {
+          this.editingName = true;
+          this.renderDetail();
+        });
       }
     }
     birdDetailHtml(b) {
       const status = STATUS[b.status === "active" ? b.condition || "healthy" : b.status] || STATUS.healthy;
       const tgt = has(b.pctOfTarget) ? ` \xB7 ${pct(b.pctOfTarget)} of target` : "";
       const note = b.note ? ` \xB7 \u201C${esc(b.note)}\u201D` : "";
-      const info = `<div class="bird-info"><strong>${esc(b.name)}</strong> \xB7 day ${b.ageDays} \xB7 <span style="color:${status.color}">${status.label}</span> \xB7 ${b.latestWeightG ? `${kg(b.latestWeightG)} kg${tgt}` : "no weight yet"}${note}</div>`;
+      const nameHtml = this.editingName ? `<span class="name-edit-box">
+           <input class="name-input" type="text" value="${esc(b.name)}" aria-label="Bird name" />
+           <button class="name-save" type="button">Save</button>
+           <span class="name-msg" aria-live="polite"></span>
+         </span>` : `<button class="name-edit" type="button" title="Tap to edit name">${esc(b.name)}</button>`;
+      const info = `<div class="bird-info">${nameHtml} \xB7 day ${b.ageDays} \xB7 <span style="color:${status.color}">${status.label}</span> \xB7 ${b.latestWeightG ? `${kg(b.latestWeightG)} kg${tgt}` : "no weight yet"}${note}</div>`;
       if (b.status !== "active") {
         return info;
       }
@@ -13027,6 +13063,38 @@ var FlockOverviewBundle = (() => {
         <select class="bird-status">${opts}</select>
         <span class="bird-status-msg" aria-live="polite"></span>
       </label>`;
+    }
+    async saveName(id, rawName) {
+      const name = (rawName || "").trim();
+      const msg = this.shadowRoot.querySelector(".name-msg");
+      if (!name) {
+        this.editingName = false;
+        this.renderDetail();
+        return;
+      }
+      if (msg) {
+        msg.textContent = "Saving\u2026";
+      }
+      try {
+        const contact = await this.cht.v1.person.getByUuid(id);
+        if (!contact) {
+          throw new Error(`contact ${id} not found`);
+        }
+        contact.name = name;
+        await this.cht.v1.person.update(contact);
+        const entry = this.birds.find((bd) => bd.contact._id === id);
+        if (entry) {
+          entry.contact.name = name;
+        }
+        this.editingName = false;
+        this.recompute();
+        this.draw();
+      } catch (err) {
+        console.error("flock-overview: failed to save bird name", err);
+        if (msg) {
+          msg.textContent = "Save failed";
+        }
+      }
     }
     async updateBirdStatus(id, value) {
       const select = this.shadowRoot.querySelector(".bird-status");

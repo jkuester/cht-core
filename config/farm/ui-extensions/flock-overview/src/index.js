@@ -190,14 +190,33 @@ export default class FlockOverview extends HTMLElement {
 
   selectBird(id) {
     this.selectedId = id;
+    this.editingName = false;
     this.shadowRoot.querySelectorAll('.bird').forEach((c) => c.classList.toggle('sel', c.dataset.id === id));
-    const b = this.metrics.rows.find((r) => r.id === id);
+    this.renderDetail();
+  }
+
+  renderDetail() {
+    const b = this.metrics.rows.find((r) => r.id === this.selectedId);
     const detail = this.shadowRoot.getElementById('bird-detail');
     if (!b || !detail) { return; }
     detail.innerHTML = this.birdDetailHtml(b);
+
     const select = detail.querySelector('.bird-status');
     if (select) {
-      select.addEventListener('change', () => this.updateBirdStatus(id, select.value));
+      select.addEventListener('change', () => this.updateBirdStatus(b.id, select.value));
+    }
+
+    if (this.editingName) {
+      const input = detail.querySelector('.name-input');
+      const commit = () => this.saveName(b.id, input.value);
+      input.focus();
+      input.select();
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      });
+      detail.querySelector('.name-save').addEventListener('click', commit);
+    } else {
+      detail.querySelector('.name-edit').addEventListener('click', () => { this.editingName = true; this.renderDetail(); });
     }
   }
 
@@ -205,7 +224,14 @@ export default class FlockOverview extends HTMLElement {
     const status = STATUS[b.status === 'active' ? (b.condition || 'healthy') : b.status] || STATUS.healthy;
     const tgt = has(b.pctOfTarget) ? ` · ${pct(b.pctOfTarget)} of target` : '';
     const note = b.note ? ` · “${esc(b.note)}”` : '';
-    const info = `<div class="bird-info"><strong>${esc(b.name)}</strong> · day ${b.ageDays} · `
+    const nameHtml = this.editingName
+      ? `<span class="name-edit-box">
+           <input class="name-input" type="text" value="${esc(b.name)}" aria-label="Bird name" />
+           <button class="name-save" type="button">Save</button>
+           <span class="name-msg" aria-live="polite"></span>
+         </span>`
+      : `<button class="name-edit" type="button" title="Tap to edit name">${esc(b.name)}</button>`;
+    const info = `<div class="bird-info">${nameHtml} · day ${b.ageDays} · `
       + `<span style="color:${status.color}">${status.label}</span> · `
       + `${b.latestWeightG ? `${kg(b.latestWeightG)} kg${tgt}` : 'no weight yet'}${note}</div>`;
     if (b.status !== 'active') {
@@ -219,6 +245,34 @@ export default class FlockOverview extends HTMLElement {
         <select class="bird-status">${opts}</select>
         <span class="bird-status-msg" aria-live="polite"></span>
       </label>`;
+  }
+
+  async saveName(id, rawName) {
+    const name = (rawName || '').trim();
+    const msg = this.shadowRoot.querySelector('.name-msg');
+    if (!name) {
+      // Empty name is invalid for person.update — treat as cancel.
+      this.editingName = false;
+      this.renderDetail();
+      return;
+    }
+    if (msg) { msg.textContent = 'Saving…'; }
+    try {
+      const contact = await this.cht.v1.person.getByUuid(id);
+      if (!contact) { throw new Error(`contact ${id} not found`); }
+      contact.name = name;
+      await this.cht.v1.person.update(contact);
+
+      const entry = this.birds.find((bd) => bd.contact._id === id);
+      if (entry) { entry.contact.name = name; }
+      this.editingName = false;
+      this.recompute();
+      this.draw();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('flock-overview: failed to save bird name', err);
+      if (msg) { msg.textContent = 'Save failed'; }
+    }
   }
 
   async updateBirdStatus(id, value) {
