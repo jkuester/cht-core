@@ -81,5 +81,11 @@
         "undo_death_report"
       ]
     }
+  },
+  "header_tabs": {
+    "contacts": {
+      "resource_icon": "icon-barn",
+      "weight": "0.5"
+    }
   }
 }
