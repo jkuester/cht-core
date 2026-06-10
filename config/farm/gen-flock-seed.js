@@ -66,7 +66,7 @@ docs.push({
   _id: 'farmer-macdonald',
   type: 'contact',
   contact_type: 'farmer',
-  name: 'Old MacDonald',
+  name: 'Kernel Sanders',
   parent: { _id: FACILITY },
   reported_date: at(0),
 });
